@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MemQuiz</title>
+<style>
+  /* =========================================================
+     DESIGN TOKENS
+     Palette: deep slate background, electric teal accent,
+     warm off-white text. Monospace-forward: the app IS text.
+     Signature element: the diff annotation with inline
+     red/green word-level highlights — the whole UI builds
+     toward that payoff moment.
+  ========================================================= */
+  :root {
+    --bg:         #0e1117;
+    --surface:    #161b22;
+    --surface2:   #1f2630;
+    --border:     #2d3748;
+    --accent:     #00d4aa;
+    --accent-dim: #00a884;
+    --danger:     #e05c5c;
+    --warn:       #e8a83c;
+    --text:       #e2e8f0;
+    --text-dim:   #8892a0;
+    --hit:        rgba(0, 212, 170, 0.18);
+    --miss:       rgba(224, 92, 92, 0.22);
+    --hit-text:   #00d4aa;
+    --miss-text:  #e05c5c;
+    --radius:     6px;
+    --mono:       "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+    --sans:       "Inter", system-ui, sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* ---- Layout ---- */
+  #app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+  .logo span { color: var(--text-dim); font-weight: 400; }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .user-pill {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+  }
+  .user-pill strong { color: var(--accent); }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 0;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 20px;
+    gap: 24px;
+  }
+
+  /* ---- Sidebar ---- */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+
+  .card-title {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+  }
+
+  /* ---- Form controls ---- */
+  label { font-size: 0.82rem; color: var(--text-dim); display: block; margin-bottom: 5px; }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    padding: 10px 12px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea:focus, input[type="text"]:focus {
+    border-color: var(--accent);
+  }
+
+  select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 0.9rem;
+    padding: 8px 10px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238892a0'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  select:focus { border-color: var(--accent); }
+
+  /* Toggle row */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 10px;
+  }
+
+  .toggle {
+    position: relative;
+    width: 38px; height: 20px;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-slider::before {
+    content: "";
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle input:checked + .toggle-slider { background: var(--accent-dim); }
+  .toggle input:checked + .toggle-slider::before {
+    transform: translateX(18px);
+    background: var(--accent);
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border-radius: var(--radius);
+    font-size: 0.87rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0e1117;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-dim); border-color: var(--accent-dim); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-dim);
+    border-color: var(--border);
+  }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+  .btn-danger:hover:not(:disabled) { background: rgba(224,92,92,0.1); }
+
+  .btn-sm { padding: 5px 11px; font-size: 0.78rem; }
+  .btn-full { width: 100%; }
+
+  /* ---- Main panel ---- */
+  .main-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+
+  /* Phase tabs */
+  .phase-tabs {
+    display: flex;
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .phase-tab {
+    flex: 1;
+    padding: 11px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    cursor: pointer;
+    border: none;
+    background: none;
+    transition: all 0.15s;
+  }
+  .phase-tab.active {
+    background: var(--surface2);
+    color: var(--accent);
+  }
+  .phase-tab:hover:not(.active) { color: var(--text); }
+  .phase-tab:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Chunk navigation */
+  .chunk-nav {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+  }
+  .chunk-nav .progress {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 0.85rem;
+  }
+
+  /* Memorize display */
+  .memorize-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    font-family: var(--mono);
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--text);
+    min-height: 120px;
+  }
+
+  .memorize-block.empty {
+    color: var(--text-dim);
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+  }
+
+  /* Test area */
+  .test-area textarea {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    line-height: 1.8;
+    min-height: 160px;
+  }
+
+  /* Diff result */
+  .diff-section { display: flex; flex-direction: column; gap: 14px; }
+
+  .diff-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .accuracy-badge {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+  }
+  .accuracy-badge.high { color: var(--accent); }
+  .accuracy-badge.mid  { color: var(--warn); }
+  .accuracy-badge.low  { color: var(--danger); }
+
+  .diff-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    font-family: var(--mono);
+  }
+
+  .diff-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    line-height: 2;
+    word-break: break-word;
+  }
+
+  .diff-block .hit {
+    background: var(--hit);
+    color: var(--hit-text);
+    border-radius: 3px;
+    padding: 1px 3px;
+  }
+  .diff-block .miss {
+    background: var(--miss);
+    color: var(--miss-text);
+    border-radius: 3px;
+    padding: 1px 3px;
+    text-decoration: underline;
+    text-decoration-color: var(--miss-text);
+    text-decoration-style: wavy;
+  }
+
+  /* History */
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .history-list::-webkit-scrollbar { width: 4px; }
+  .history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .history-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .history-item .h-text {
+    color: var(--text-dim);
+    font-family: var(--mono);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .history-item .h-meta {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .h-score {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .h-score.high { color: var(--accent); }
+  .h-score.mid  { color: var(--warn); }
+  .h-score.low  { color: var(--danger); }
+  .h-diff-tag {
+    font-size: 0.7rem;
+    padding: 1px 7px;
+    border-radius: 20px;
+    background: var(--surface2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  /* ---- Login screen ---- */
+  #login-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 10px;
+  }
+
+  .login-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 40px 44px;
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .login-logo {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    letter-spacing: -0.03em;
+  }
+  .login-sub {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-top: -8px;
+  }
+
+  /* Alerts */
+  .alert {
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    border: 1px solid;
+  }
+  .alert-error { background: rgba(224,92,92,0.1); border-color: var(--danger); color: var(--danger); }
+
+  /* Utilities */
+  .flex-row { display: flex; gap: 10px; align-items: center; }
+  .flex-row .btn { flex-shrink: 0; }
+  .hidden { display: none !important; }
+  .mt-8 { margin-top: 8px; }
+  .mt-14 { margin-top: 14px; }
+  .sep { height: 1px; background: var(--border); margin: 6px 0; }
+
+  /* Scratchpad */
+  .scratchpad-section {
+    margin-top: 16px;
+  }
+  .scratchpad-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .scratchpad-label::after {
+    content: "clears on tab switch";
+    font-size: 0.68rem;
+    color: var(--border);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  #scratchpad {
+    width: 100%;
+    background: var(--bg);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    line-height: 1.7;
+    padding: 10px 12px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #scratchpad:focus {
+    border-color: var(--accent-dim);
+    border-style: solid;
+    color: var(--text);
+  }
+  #scratchpad::placeholder {
+    color: var(--border);
+  }
+
+  @media (max-width: 780px) {
+    main { grid-template-columns: 1fr; }
+    .sidebar { order: 2; }
+    .main-panel { order: 1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     LOGIN SCREEN
+============================================================ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">MemQuiz</div>
+    <p class="login-sub">Memory training for technical text.</p>
+    <div>
+      <label for="login-name">Your name</label>
+      <input type="text" id="login-name" placeholder="e.g. Av" autocomplete="off" />
+    </div>
+    <button class="btn btn-primary btn-full" id="login-btn">Enter →</button>
+    <div id="login-error" class="alert alert-error hidden"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MAIN APP (hidden until login)
+============================================================ -->
+<div id="app" class="hidden">
+
+  <header>
+    <div class="logo">Mem<span>Quiz</span></div>
+    <div class="header-right">
+      <div class="user-pill" id="user-pill">logged out</div>
+      <button class="btn btn-ghost btn-sm" id="logout-btn">Log out</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ==================== SIDEBAR ==================== -->
+    <aside class="sidebar">
+
+      <!-- Text Input -->
+      <div class="card">
+        <div class="card-title">Source Text</div>
+        <label for="source-text">Paste technical text to study</label>
+        <textarea id="source-text" rows="8" placeholder="Paste any text here — documentation, research papers, textbook excerpts, RFC specs, anything dense with technical content you want to memorize."></textarea>
+        <div class="mt-8">
+          <label for="difficulty-select">Difficulty</label>
+          <select id="difficulty-select">
+            <option value="easy">Easy — ~16 notable words</option>
+            <option value="medium" selected>Medium — ~32 notable words</option>
+            <option value="hard">Hard — ~64 notable words</option>
+            <option value="extra_hard">Extra Hard — ~96 notable words</option>
+            <option value="recite">Recite — full document</option>
+          </select>
+        </div>
+        <div class="toggle-row mt-8">
+          <span>Shuffle chunks</span>
+          <label class="toggle">
+            <input type="checkbox" id="shuffle-toggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-full mt-8" id="extract-btn">Extract Chunks →</button>
+      </div>
+
+      <!-- History -->
+      <div class="card">
+        <div class="card-title">History</div>
+        <div class="history-list" id="history-list">
+          <p style="color:var(--text-dim);font-size:0.82rem;">No attempts yet.</p>
+        </div>
+        <div class="flex-row mt-8">
+          <button class="btn btn-ghost btn-sm" id="clear-last10-btn">Clear last 10</button>
+          <button class="btn btn-danger btn-sm" id="clear-all-btn">Clear all</button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ==================== MAIN PANEL ==================== -->
+    <section class="main-panel">
+
+      <!-- Phase tabs -->
+      <div class="phase-tabs">
+        <button class="phase-tab active" id="tab-memorize" data-phase="memorize">① Memorize</button>
+        <button class="phase-tab" id="tab-test" data-phase="test">② Test</button>
+        <button class="phase-tab hidden" id="tab-result" data-phase="result">③ Result</button>
+      </div>
+
+      <!-- Chunk navigation -->
+      <div class="chunk-nav" id="chunk-nav" style="display:none;">
+        <button class="btn btn-ghost btn-sm" id="prev-chunk-btn">← Prev</button>
+        <span class="progress" id="chunk-progress">—</span>
+        <button class="btn btn-ghost btn-sm" id="next-chunk-btn">Next →</button>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto;" id="new-extract-btn">↺ New extraction</button>
+      </div>
+
+      <!-- ---- MEMORIZE PHASE ---- -->
+      <div id="phase-memorize">
+        <div class="memorize-block empty" id="memorize-display">
+          Extract chunks from the sidebar to begin.
+        </div>
+        <div class="flex-row mt-8" id="memorize-actions" style="display:none;">
+          <button class="btn btn-primary" id="go-test-btn">I'm ready — Test me →</button>
+        </div>
+
+        <!-- Scratchpad — active recall through typing, clears on every tab switch -->
+        <div class="scratchpad-section" id="scratchpad-section" style="display:none;">
+          <div class="scratchpad-label">Scratchpad</div>
+          <textarea
+            id="scratchpad"
+            rows="5"
+            placeholder="Type the text here to burn it in. Not graded — just for active recall practice through writing."
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- ---- TEST PHASE ---- -->
+      <div id="phase-test" class="hidden">
+        <div class="card">
+          <div class="card-title">Recall — type what you remember</div>
+          <div class="test-area">
+            <textarea id="answer-input" rows="7" placeholder="Type as much as you can recall. Capitalization and punctuation do affect scoring, so aim for accuracy."></textarea>
+          </div>
+          <div class="flex-row mt-8">
+            <button class="btn btn-primary" id="submit-btn">Grade my answer →</button>
+            <button class="btn btn-ghost" id="back-memorize-btn">← Back to memorize</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- RESULT PHASE ---- -->
+      <div id="phase-result" class="hidden">
+        <div class="card diff-section">
+          <div class="diff-header">
+            <div>
+              <div class="card-title">Result</div>
+              <div class="accuracy-badge" id="accuracy-display">—%</div>
+            </div>
+            <div class="flex-row">
+              <button class="btn btn-ghost" id="retry-btn">↺ Retry this chunk</button>
+              <button class="btn btn-primary" id="next-after-result-btn">Next chunk →</button>
+            </div>
+          </div>
+
+          <div class="sep mt-8"></div>
+
+          <div>
+            <div class="diff-label">Your answer</div>
+            <div class="diff-block" id="diff-answer"></div>
+          </div>
+          <div>
+            <div class="diff-label">Target text</div>
+            <div class="diff-block" id="diff-target"></div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<script>
+// =============================================================
+//  MemQuiz frontend — vanilla JS, zero dependencies
+// =============================================================
+
+// ---- State ----
+const state = {
+  user: null,
+  history: [],
+  chunks: [],
+  chunkIndex: 0,
+  currentChunk: null,
+  phase: "memorize",   // memorize | test | result
+};
+
+// ---- DOM references ----
+const $ = id => document.getElementById(id);
+
+// ---- Utility ----
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { "Content-Type": "application/json" },
+  };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+function scoreClass(pct) {
+  if (pct >= 80) return "high";
+  if (pct >= 50) return "mid";
+  return "low";
+}
+
+function renderHistory() {
+  const list = $("history-list");
+  if (!state.history.length) {
+    list.innerHTML = `<p style="color:var(--text-dim);font-size:0.82rem;">No attempts yet.</p>`;
+    return;
+  }
+  list.innerHTML = state.history.map(h => `
+    <div class="history-item">
+      <div class="h-text">${escHtml(h.chunk_text)}</div>
+      <div class="h-meta">
+        <span class="h-score ${scoreClass(h.accuracy)}">${h.accuracy}%</span>
+        <span class="h-diff-tag">${h.difficulty}</span>
+        <span style="color:var(--text-dim);font-size:0.72rem;margin-left:auto;">${h.timestamp ? h.timestamp.slice(0,10) : ""}</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ---- Phase switching ----
+function showPhase(phase) {
+  state.phase = phase;
+  ["memorize","test","result"].forEach(p => {
+    $(`phase-${p}`).classList.toggle("hidden", p !== phase);
+    const tab = $(`tab-${p}`);
+    tab.classList.toggle("active", p === phase);
+  });
+  // Show result tab only when there's a result
+  $("tab-result").classList.toggle("hidden", phase !== "result");
+
+  // Clear scratchpad every time the user leaves the memorize tab —
+  // it's a disposable active-recall tool, not a save buffer.
+  if (phase !== "memorize") {
+    $("scratchpad").value = "";
+  }
+
+  if (phase === "test") {
+    $("answer-input").value = "";
+    $("answer-input").focus();
+  }
+}
+
+function setChunk(index) {
+  if (!state.chunks.length) return;
+  state.chunkIndex = Math.max(0, Math.min(index, state.chunks.length - 1));
+  state.currentChunk = state.chunks[state.chunkIndex];
+
+  // Update memorize display
+  const display = $("memorize-display");
+  display.classList.remove("empty");
+  display.textContent = state.currentChunk.text;
+  $("memorize-actions").style.display = "flex";
+  $("scratchpad-section").style.display = "block";
+  $("scratchpad").value = "";   // fresh pad for each new chunk
+
+  // Update nav
+  $("chunk-nav").style.display = "flex";
+  $("chunk-progress").textContent = `${state.chunkIndex + 1} / ${state.chunks.length}`;
+  $("prev-chunk-btn").disabled = state.chunkIndex === 0;
+  $("next-chunk-btn").disabled = state.chunkIndex >= state.chunks.length - 1;
+
+  showPhase("memorize");
+}
+
+// ---- Login ----
+async function doLogin() {
+  const username = $("login-name").value.trim();
+  if (!username) return;
+  try {
+    const data = await api("POST", "/api/login", { username });
+    state.user = data.username;
+    state.history = data.history || [];
+    $("login-screen").classList.add("hidden");
+    $("app").classList.remove("hidden");
+    $("user-pill").innerHTML = `Logged in as <strong>${escHtml(state.user)}</strong>`;
+    renderHistory();
+  } catch (err) {
+    $("login-error").textContent = err.message;
+    $("login-error").classList.remove("hidden");
+  }
+}
+
+async function doLogout() {
+  await api("POST", "/api/logout");
+  state.user = null;
+  state.history = [];
+  state.chunks = [];
+  state.currentChunk = null;
+  $("app").classList.add("hidden");
+  $("login-screen").classList.remove("hidden");
+  $("login-name").value = "";
+  $("chunk-nav").style.display = "none";
+  $("memorize-display").classList.add("empty");
+  $("memorize-display").textContent = "Extract chunks from the sidebar to begin.";
+  $("memorize-actions").style.display = "none";
+  showPhase("memorize");
+}
+
+// ---- Extract ----
+async function doExtract() {
+  const text = $("source-text").value.trim();
+  if (!text) return;
+  const difficulty = $("difficulty-select").value;
+  const shuffle = $("shuffle-toggle").checked;
+
+  $("extract-btn").disabled = true;
+  $("extract-btn").textContent = "Extracting…";
+
+  try {
+    const data = await api("POST", "/api/extract", { text, difficulty, shuffle });
+    state.chunks = data.chunks;
+    state.chunkIndex = 0;
+    if (state.chunks.length) {
+      setChunk(0);
+    } else {
+      alert("No chunks could be extracted from that text.");
+    }
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    $("extract-btn").disabled = false;
+    $("extract-btn").textContent = "Extract Chunks →";
+  }
+}
+
+// ---- Submit answer ----
+async function doSubmit() {
+  const answer = $("answer-input").value;
+  const target = state.currentChunk?.text;
+  if (!target) return;
+
+  $("submit-btn").disabled = true;
+  $("submit-btn").textContent = "Grading…";
+
+  try {
+    const result = await api("POST", "/api/score", { target, answer });
+    renderResult(result);
+
+    // Save to history
+    const entry = {
+      chunk_text: target,
+      difficulty: $("difficulty-select").value,
+      accuracy: result.accuracy,
+      timestamp: new Date().toISOString(),
+    };
+    const histData = await api("POST", "/api/history", entry);
+    state.history = histData.history;
+    renderHistory();
+
+    showPhase("result");
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    $("submit-btn").disabled = false;
+    $("submit-btn").textContent = "Grade my answer →";
+  }
+}
+
+function renderResult(result) {
+  const pct = result.accuracy;
+  const badge = $("accuracy-display");
+  badge.textContent = `${pct}%`;
+  badge.className = `accuracy-badge ${scoreClass(pct)}`;
+
+  $("diff-answer").innerHTML = annotateTokens(result.annotated_answer);
+  $("diff-target").innerHTML = annotateTokens(result.annotated_target);
+
+  // Enable/disable next after result
+  const hasNext = state.chunkIndex < state.chunks.length - 1;
+  $("next-after-result-btn").disabled = !hasNext;
+}
+
+function annotateTokens(tokens) {
+  return tokens.map(t =>
+    `<span class="${t.correct ? "hit" : "miss"}">${escHtml(t.text)}</span>`
+  ).join(" ");
+}
+
+// ---- History management ----
+async function clearHistory(mode) {
+  const confirmed = confirm(mode === "all"
+    ? "Clear your entire history? This cannot be undone."
+    : "Clear the 10 oldest history entries?");
+  if (!confirmed) return;
+  const data = await api("DELETE", "/api/history", { mode });
+  state.history = data.history;
+  renderHistory();
+}
+
+// ---- Event listeners ----
+$("login-btn").addEventListener("click", doLogin);
+$("login-name").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+$("logout-btn").addEventListener("click", doLogout);
+$("extract-btn").addEventListener("click", doExtract);
+
+$("prev-chunk-btn").addEventListener("click", () => setChunk(state.chunkIndex - 1));
+$("next-chunk-btn").addEventListener("click", () => setChunk(state.chunkIndex + 1));
+$("new-extract-btn").addEventListener("click", () => {
+  state.chunks = [];
+  state.currentChunk = null;
+  $("chunk-nav").style.display = "none";
+  $("memorize-display").classList.add("empty");
+  $("memorize-display").textContent = "Extract chunks from the sidebar to begin.";
+  $("memorize-actions").style.display = "none";
+  showPhase("memorize");
+  $("source-text").focus();
+});
+
+$("go-test-btn").addEventListener("click", () => showPhase("test"));
+$("back-memorize-btn").addEventListener("click", () => showPhase("memorize"));
+$("submit-btn").addEventListener("click", doSubmit);
+$("answer-input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doSubmit();
+});
+
+$("retry-btn").addEventListener("click", () => {
+  showPhase("test");
+  $("answer-input").value = "";
+});
+
+$("next-after-result-btn").addEventListener("click", () => {
+  setChunk(state.chunkIndex + 1);
+});
+
+// Phase tab clicking (read-only nav — doesn't allow jumping to result from scratch)
+["memorize","test"].forEach(phase => {
+  $(`tab-${phase}`).addEventListener("click", () => {
+    if (!state.currentChunk) return;
+    showPhase(phase);
+  });
+});
+$("tab-result").addEventListener("click", () => {
+  // Only available after a result exists (tab is hidden otherwise)
+});
+
+$("clear-last10-btn").addEventListener("click", () => clearHistory("last10"));
+$("clear-all-btn").addEventListener("click", () => clearHistory("all"));
+</script>
+</body>
+</html>
