@@ -236,6 +236,9 @@ class TestFlaskRoutes(unittest.TestCase):
         # Each test gets a fresh session context
         self.ctx = app.test_request_context()
         self.ctx.push()
+        # Set a test password so password-gate tests behave correctly
+        import app as app_module
+        app_module.set_password("youre cool")
 
     def tearDown(self):
         self.ctx.pop()
@@ -260,7 +263,7 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(r.status_code, 403)
 
     def test_login_blocked_without_unlock(self):
-        # Intentionally no _unlock() call — session is fresh
+        # No _unlock() call — password is set in setUp, so login should be blocked
         r = self.client.post("/api/login", json={"username": "testuser"})
         self.assertEqual(r.status_code, 403)
 

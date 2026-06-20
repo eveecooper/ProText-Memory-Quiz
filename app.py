@@ -52,9 +52,16 @@ app.secret_key = "protext-memory-quiz-local-secret"   # local use only; change i
 
 # ---------------------------------------------------------------------------
 # Shared access password
-# Change this to whatever you want. Set to None to disable the password gate.
+# None = no gate (local mode). run.py calls set_password() when --host is used.
 # ---------------------------------------------------------------------------
-ACCESS_PASSWORD = "youre cool"
+ACCESS_PASSWORD = None
+
+
+def set_password(password):
+    # Called by run.py at startup to enable the password gate in host mode.
+    global ACCESS_PASSWORD
+    ACCESS_PASSWORD = password
+
 
 STOP_WORDS = set(stopwords.words("english"))
 
@@ -446,3 +453,104 @@ def clear_history():
 
     save_profile(profile)
     return jsonify({"ok": True, "history": profile["history"]})
+
+
+# ---------------------------------------------------------------------------
+# Built-in example texts
+# Add more dicts to this list to offer additional texts in the UI.
+# ---------------------------------------------------------------------------
+EXAMPLE_TEXTS = [
+    {
+        "title": "Humanistic Engineering",
+        "preview": "On how technology under neoliberalism undermines democracy, labor, and human well-being — and what engineers should do about it.",
+        "text": (
+            "The Jetsons was a cartoon that premiered in the 1960s that depicted life in the future "
+            "with all manner of automation conveniences: robot maids, flying cars, moving sidewalks. "
+            "The science fiction writer Philip K. Dick envisioned a less optimistic future — homes "
+            "filled with smart devices that require payment every time you brew coffee, open the "
+            "refrigerator, or open the front door. In our current world, technology keeps advancing "
+            "and promising a better, Jetsons-like future. While it is true that technology is "
+            "addressing problems, there are aggregate measures that suggest a troubling trajectory "
+            "more akin to the ones envisioned by Dick.\n\n"
+            "Technology is increasing productivity by 140% since 1973. However, there have not been "
+            "proportional gains in workers' real wages, which effectively stagnated over the same "
+            "period. The responsible companies have made a significant amount of money by monetizing "
+            "elements of human life that have never before been marketized. However, the majority of "
+            "the wealth created has not been distributed to the population at large, with the top 1% "
+            "now holding a historic and increasing proportion of resources. Multiple aggregate "
+            "measures of democracy in the United States have been declining since 2014. United States "
+            "happiness has been trending down since 1973, with recent declines being highly correlated "
+            "with the frequency of phone and digital media use. Despite unprecedented connectivity, "
+            "we are in the midst of a loneliness epidemic whose detrimental health effects are "
+            "spreading throughout society.\n\n"
+            "Engineering is undeniably complicit. It created the technology that has undermined the "
+            "value of labor, enabled the privatization of public resources, funneled wealth and power "
+            "upward, and sacrificed human well-being for short-term profit. The net effect is that "
+            "engineering, often despite the intentions of its practitioners, is contributing to a "
+            "society that is less fair, less just, less democratic, disempowering, and more "
+            "precarious.\n\n"
+            "Several characteristics of engineering culture contribute to this failure. Engineers "
+            "have decided that everything should be really complex. Complexity is dangerous because "
+            "it makes it difficult to identify bugs or design flaws, hard for any engineer to keep "
+            "the entire system in their head, and hard for humans to use the system without making "
+            "errors. Complexity can hide bad intentions inside convoluted processes — a common "
+            "practice of the financial industry and, as the Volkswagen emissions cheating scandal "
+            "demonstrated, of automakers. Complexity is antidemocratic because it prevents people "
+            "from understanding, repairing, or repurposing technology.\n\n"
+            "Good engineering work that exists is largely reactive. Reactive work too often only "
+            "serves to prop up broken or unethical systems, frequently by adding additional layers "
+            "of complexity. It lacks vision: research constrained to iterative improvement cannot "
+            "imagine systemic alternatives. The overemphasis on tech innovation creates a paradox "
+            "where immense engineering effort is not actually designing things for people. Products "
+            "are created to fuel technological and monetary ambitions of larger institutions, not to "
+            "help people do their jobs or live their lives.\n\n"
+            "The core issue driving all other problems is that engineering lacks values. Science and "
+            "technology are not inherently virtuous — they are tools that, unless special effort is "
+            "taken to the contrary, will be used to support and advance the goals of society's "
+            "powerful. Neoliberalism — the general idea that society works best when people and "
+            "institutions work according to market principles — is the dominant driving ideology. "
+            "It encourages the deregulation of the private sector, the privatization of public "
+            "resources, and the marketization of things once considered free, like socializing. "
+            "Under neoliberalism, the benefits of technology are frequently not fairly distributed: "
+            "a technology with immense societal benefit will be priced to maximize profit, making "
+            "it inaccessible to people of modest means.\n\n"
+            "Humanistic engineering offers a corrective. It is a value-driven approach where all "
+            "engineering is done with the explicit purpose of improving people's lives and advancing "
+            "humanistic goals. Its core principles are: all engineering should be human centered; "
+            "all engineering products should be accessible and inclusive; all engineering efforts "
+            "should be sustainable; all engineered technology should be democratic, designed to "
+            "enable people to engage with, repair, and modify it; and all engineering products "
+            "should be empowering, giving people power and control over their lives rather than "
+            "ceding control to corporations and governments.\n\n"
+            "Realizing humanistic engineering requires a significant multidisciplinary effort across "
+            "research, education, and community organizing. Engineers must be trained in how to use "
+            "legal, institutional, and collective power — including whistleblowing, unionization, "
+            "and workers' self-directed enterprises — so that the responsibility for ethical behavior "
+            "does not fall solely on the individual. Professional societies must provide legal aid, "
+            "unemployment support, and collective pressure on organizations behaving antihumanistically.\n\n"
+            "We engineers need to decide who we work for. Are we courtiers and sycophants for the "
+            "powerful, or do we serve humanity more broadly? Doing the right thing is noble not "
+            "because it is easy, but because it is hard and requires personal risk and sacrifice. "
+            "Our countries are dependent on the economic growth and stability facilitated by the "
+            "technology that we discover and design. Because we currently hold these positions, we "
+            "collectively have the ability to negotiate the terms under which we deliver our services."
+        ),
+    },
+]
+
+
+@app.get("/api/example_texts")
+def example_texts():
+    # Returns built-in example texts for the frontend quick-load option.
+    # Only the title and preview are sent initially — text is loaded on demand.
+    return jsonify({
+        "texts": [{"title": t["title"], "preview": t["preview"]} for t in EXAMPLE_TEXTS]
+    })
+
+
+@app.get("/api/example_texts/<int:index>")
+def get_example_text(index):
+    # Returns the full text for a specific example by index.
+    if index < 0 or index >= len(EXAMPLE_TEXTS):
+        return jsonify({"error": "Example not found."}), 404
+    return jsonify({"text": EXAMPLE_TEXTS[index]["text"]})

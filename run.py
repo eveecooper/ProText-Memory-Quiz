@@ -8,6 +8,9 @@ Usage:
     python run.py --port 8080      # custom port
     python run.py --no-browser     # don't auto-open browser
     python run.py --debug          # Flask debug mode (dev only)
+
+Password is only required when running with --host.
+To change it, edit the set_password() call in main() below.
 """
 
 import argparse
@@ -20,7 +23,7 @@ import webbrowser
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app import app
+from app import app, set_password
 
 
 def parse_args():
@@ -91,6 +94,8 @@ def main():
     if args.host:
         print("  ⚠  Network mode: anyone on your WiFi can connect.")
         print("     Stop the server with Ctrl+C when done sharing.\n")
+        # Enable password gate — only active when hosting for others
+        set_password("youre cool")
 
     if not args.no_browser:
         open_browser(local_url)

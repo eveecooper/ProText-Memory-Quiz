@@ -518,6 +518,29 @@
     color: var(--border);
   }
 
+  /* Example text picker */
+  .example-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    margin-bottom: 5px;
+  }
+  .example-item:hover { border-color: var(--accent); }
+  .example-item .ex-title {
+    font-size: 0.83rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  .example-item .ex-preview {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
   /* Star / favorites */
   .star-btn {
     background: none;
@@ -643,7 +666,11 @@
       <!-- Text Input -->
       <div class="card">
         <div class="card-title">Source Text</div>
-        <label for="source-text">Paste technical text to study</label>
+        <div class="flex-row" style="justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <label for="source-text" style="margin-bottom:0;">Paste technical text to study</label>
+          <button class="btn btn-ghost btn-sm" id="load-example-btn">Load example ↓</button>
+        </div>
+        <div id="example-list" class="hidden" style="margin-bottom:8px;"></div>
         <textarea id="source-text" rows="8" placeholder="Paste any text here — documentation, research papers, textbook excerpts, RFC specs, anything dense with technical content you want to memorize."></textarea>
         <div class="mt-8">
           <label for="difficulty-select">Difficulty</label>
@@ -1096,8 +1123,39 @@ async function clearHistory(mode) {
 }
 
 // ---- Event listeners ----
+// ---- Example texts ----
+let exampleTextsCache = null;
+
+async function toggleExampleList() {
+  const panel = $("example-list");
+  if (!panel.classList.contains("hidden")) {
+    panel.classList.add("hidden");
+    return;
+  }
+  // Load list once and cache it
+  if (!exampleTextsCache) {
+    const data = await api("GET", "/api/example_texts");
+    exampleTextsCache = data.texts;
+  }
+  panel.innerHTML = exampleTextsCache.map((t, i) => `
+    <div class="example-item" onclick="loadExampleText(${i})">
+      <div class="ex-title">${escHtml(t.title)}</div>
+      <div class="ex-preview">${escHtml(t.preview)}</div>
+    </div>
+  `).join("");
+  panel.classList.remove("hidden");
+}
+
+async function loadExampleText(index) {
+  const data = await api("GET", \`/api/example_texts/\${index}\`);
+  $("source-text").value = data.text;
+  $("example-list").classList.add("hidden");
+  $("source-text").focus();
+}
+
 $("password-btn").addEventListener("click", doUnlock);
 $("password-input").addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
+$("load-example-btn").addEventListener("click", toggleExampleList);
 $("login-btn").addEventListener("click", doLogin);
 $("login-name").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
 $("logout-btn").addEventListener("click", doLogout);
