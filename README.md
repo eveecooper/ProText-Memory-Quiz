@@ -1,4 +1,4 @@
-# MemQuiz
+# ProText Memory Quiz
 
 A local memory-training app for technical text. Paste dense documentation, research papers,
 or spec sheets — the app extracts high-jargon chunks, runs you through a recall test,
@@ -13,7 +13,7 @@ and scores your answer with word-level green/red diff highlighting.
 pip install flask nltk
 
 # 2. Run the app
-cd memquiz_app
+cd protext_memory_quiz
 python run.py
 ```
 
@@ -24,7 +24,7 @@ The browser opens automatically at `http://127.0.0.1:5000`.
 ## Directory Layout
 
 ```
-memquiz_app/
+protext_memory_quiz/
 ├── run.py          ← console launcher (start here)
 ├── app.py          ← Flask backend + NLP logic
 ├── templates/

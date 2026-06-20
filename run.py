@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-run.py — MemQuiz launcher
+run.py — ProText Memory Quiz launcher
 --------------------------
-Run from within the memquiz_app/ directory:
+Run from within the protext_memory_quiz/ directory:
 
     python run.py
     python run.py --port 8080
@@ -25,7 +25,7 @@ from app import app   # Flask app object
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="MemQuiz — local memory training app",
+        description="ProText Memory Quiz — local memory training app",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -57,7 +57,7 @@ def main():
 
     print()
     print("  ╔══════════════════════════════════════╗")
-    print("  ║          MemQuiz — running           ║")
+    print("  ║          ProText Memory Quiz — running           ║")
     print(f"  ║   http://127.0.0.1:{args.port:<5}             ║")
     print("  ║   Ctrl+C to stop                     ║")
     print("  ╚══════════════════════════════════════╝")

@@ -1,7 +1,7 @@
 """
 tests.py
 --------
-Unit + integration tests for MemQuiz.
+Unit + integration tests for ProText Memory Quiz.
 
 Run from anywhere inside the project:
     python tests.py
@@ -341,7 +341,7 @@ class TestFlaskRoutes(unittest.TestCase):
     def test_index_returns_html(self):
         r = self.client.get("/")
         self.assertEqual(r.status_code, 200)
-        self.assertIn(b"MemQuiz", r.data)
+        self.assertIn(b"ProText Memory Quiz", r.data)
 
 
 # ===========================================================================

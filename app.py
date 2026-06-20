@@ -1,7 +1,7 @@
 """
 app.py
 ------
-Flask backend for MemQuiz — a local memory-training quiz app.
+Flask backend for ProText Memory Quiz — a local memory-training quiz app.
 
 This module is imported by run.py. Do not run directly.
 
@@ -48,7 +48,7 @@ DATA_DIR  = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
-app.secret_key = "memquiz-local-only-secret"   # local use only; change if exposing to a network
+app.secret_key = "protext-memory-quiz-local-secret"   # local use only; change if exposing to a network
 
 STOP_WORDS = set(stopwords.words("english"))
 
