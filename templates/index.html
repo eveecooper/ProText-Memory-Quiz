@@ -645,6 +645,13 @@
           <div class="test-area">
             <textarea id="answer-input" rows="7" placeholder="Type as much as you can recall. Capitalization and punctuation do affect scoring, so aim for accuracy."></textarea>
           </div>
+          <div class="toggle-row mt-8">
+            <span>Lenient mode — ignore punctuation &amp; capitalization</span>
+            <label class="toggle">
+              <input type="checkbox" id="lenient-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
           <div class="flex-row mt-8">
             <button class="btn btn-primary" id="submit-btn">Grade my answer →</button>
             <button class="btn btn-ghost" id="back-memorize-btn">← Back to memorize</button>
@@ -858,7 +865,8 @@ async function doSubmit() {
   $("submit-btn").textContent = "Grading…";
 
   try {
-    const result = await api("POST", "/api/score", { target, answer });
+    const lenient = $("lenient-toggle").checked;
+    const result = await api("POST", "/api/score", { target, answer, lenient });
     renderResult(result);
 
     // Save to history

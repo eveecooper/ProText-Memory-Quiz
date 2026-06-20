@@ -196,6 +196,31 @@ class TestScoreAnswer(unittest.TestCase):
         result = score_answer("hello world", "hello earth")
         self.assertIsInstance(result["accuracy"], float)
 
+    # ---- Lenient mode ----
+
+    def test_lenient_ignores_capitalization(self):
+        result = score_answer("Hello World", "hello world", lenient=True)
+        self.assertEqual(result["accuracy"], 100.0)
+
+    def test_lenient_ignores_trailing_punctuation(self):
+        result = score_answer("hello world.", "hello world", lenient=True)
+        self.assertEqual(result["accuracy"], 100.0)
+
+    def test_lenient_splits_hyphenated_words(self):
+        # "self-attention" with lenient becomes "self attention" (two tokens)
+        # user typing "self attention" without hyphen should score 100
+        result = score_answer("self-attention mechanism", "self attention mechanism", lenient=True)
+        self.assertEqual(result["accuracy"], 100.0)
+
+    def test_lenient_false_is_strict_by_default(self):
+        # Without lenient, capitalization must match
+        result = score_answer("Hello World", "hello world", lenient=False)
+        self.assertLess(result["accuracy"], 100.0)
+
+    def test_lenient_strips_commas(self):
+        result = score_answer("one, two, three", "one two three", lenient=True)
+        self.assertEqual(result["accuracy"], 100.0)
+
 
 # ===========================================================================
 # 2. Integration tests — full HTTP round-trips via Flask test client
@@ -289,6 +314,16 @@ class TestFlaskRoutes(unittest.TestCase):
     def test_score_perfect_answer(self):
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/score", json={"target": "hello world", "answer": "hello world"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json()["accuracy"], 100.0)
+
+    def test_score_lenient_mode_via_route(self):
+        self.client.post("/api/login", json={"username": "testuser"})
+        r = self.client.post("/api/score", json={
+            "target": "Self-attention, sometimes called intra-attention.",
+            "answer": "self attention sometimes called intra attention",
+            "lenient": True,
+        })
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["accuracy"], 100.0)
 
