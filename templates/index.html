@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ProText Memory Quiz</title>
@@ -616,7 +617,7 @@
 <!-- ============================================================
      PASSWORD GATE (shown first if server has a password set)
 ============================================================ -->
-<div id="password-screen">
+<div id="password-screen" class="hidden">
   <div class="login-box">
     <div class="login-logo">ProText Memory Quiz</div>
     <p class="login-sub">Enter the access password to continue.</p>
@@ -1019,10 +1020,16 @@ async function doLogout() {
   state.chunks    = [];
   state.currentChunk = null;
   $("app").classList.add("hidden");
-  $("login-screen").classList.add("hidden");
-  $("password-screen").classList.remove("hidden");
   $("login-name").value = "";
   $("password-input").value = "";
+  const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({password_required: false}));
+  if (cfg.password_required) {
+    $("login-screen").classList.add("hidden");
+    $("password-screen").classList.remove("hidden");
+  } else {
+    $("password-screen").classList.add("hidden");
+    $("login-screen").classList.remove("hidden");
+  }
   $("chunk-nav").style.display = "none";
   $("memorize-display").classList.add("empty");
   $("memorize-display").textContent = "Extract chunks from the sidebar to begin.";
@@ -1137,17 +1144,17 @@ async function toggleExampleList() {
     const data = await api("GET", "/api/example_texts");
     exampleTextsCache = data.texts;
   }
-  panel.innerHTML = exampleTextsCache.map((t, i) => `
-    <div class="example-item" onclick="loadExampleText(${i})">
-      <div class="ex-title">${escHtml(t.title)}</div>
-      <div class="ex-preview">${escHtml(t.preview)}</div>
-    </div>
-  `).join("");
+  panel.innerHTML = exampleTextsCache.map(function(t, i) {
+    return '<div class="example-item" onclick="loadExampleText(' + i + ')">'
+      + '<div class="ex-title">' + escHtml(t.title) + '</div>'
+      + '<div class="ex-preview">' + escHtml(t.preview) + '</div>'
+      + '</div>';
+  }).join("");
   panel.classList.remove("hidden");
 }
 
 async function loadExampleText(index) {
-  const data = await api("GET", \`/api/example_texts/\${index}\`);
+  const data = await api("GET", `/api/example_texts/${index}`);
   $("source-text").value = data.text;
   $("example-list").classList.add("hidden");
   $("source-text").focus();
@@ -1155,6 +1162,20 @@ async function loadExampleText(index) {
 
 $("password-btn").addEventListener("click", doUnlock);
 $("password-input").addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
+
+(async function init() {
+  try {
+    const cfg = await fetch("/api/config").then(r => r.json());
+    if (cfg.password_required) {
+      document.getElementById("password-screen").classList.remove("hidden");
+    } else {
+      document.getElementById("login-screen").classList.remove("hidden");
+    }
+  } catch (e) {
+    document.getElementById("login-screen").classList.remove("hidden");
+  }
+})();
+
 $("load-example-btn").addEventListener("click", toggleExampleList);
 $("login-btn").addEventListener("click", doLogin);
 $("login-name").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });

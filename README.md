@@ -1,8 +1,6 @@
 # ProText Memory Quiz
 
-A local memory-training app for technical text. Paste dense documentation, research papers,
-or spec sheets — the app extracts high-jargon chunks, runs you through a recall test,
-and scores your answer with word-level green/red diff highlighting.
+A local memory-training app for technical text. Paste dense documentation, research papers, or spec sheets — whatever you want for memory training. The app extracts high-jargon chunks, runs you through a recall test, and scores your answer.
 
 ---
 
@@ -10,7 +8,7 @@ and scores your answer with word-level green/red diff highlighting.
 
 ```bash
 # 1. Install dependencies (one time)
-pip install flask nltk
+pip install -r requirements.txt
 
 # 2. Run the app
 cd protext_memory_quiz
@@ -52,10 +50,10 @@ Options:
 
 | Level       | Max sentences | Notable-word budget |
 |-------------|---------------|---------------------|
-| Easy        | 2             | ~16 words           |
-| Medium      | 4             | ~32 words           |
-| Hard        | 8             | ~64 words           |
-| Extra Hard  | 12            | ~96 words           |
+| Easy        | 2             | ~8 words           |
+| Medium      | 4             | ~16 words           |
+| Hard        | 8             | ~32 words           |
+| Extra Hard  | 12            | ~64 words           |
 | Recite      | entire doc    | unlimited           |
 
 "Notable words" excludes common stop words (a, the, of, for …).
