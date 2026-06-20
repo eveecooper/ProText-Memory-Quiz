@@ -518,6 +518,69 @@
     color: var(--border);
   }
 
+  /* Star / favorites */
+  .star-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 2px 4px;
+    color: var(--border);
+    transition: color 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .star-btn:hover { color: var(--warn); transform: scale(1.2); }
+  .star-btn.active { color: var(--warn); }
+
+  .fav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .fav-list::-webkit-scrollbar { width: 4px; }
+  .fav-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .fav-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--warn);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .fav-item:hover { border-color: var(--accent); border-left-color: var(--warn); }
+  .fav-item .fav-text {
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    flex: 1;
+  }
+  .fav-remove {
+    background: none;
+    border: none;
+    color: var(--border);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  .fav-remove:hover { color: var(--danger); }
+
   @media (max-width: 780px) {
     main { grid-template-columns: 1fr; }
     .sidebar { order: 2; }
@@ -598,6 +661,14 @@
         </div>
       </div>
 
+      <!-- Favorites -->
+      <div class="card">
+        <div class="card-title">Favorites ★</div>
+        <div class="fav-list" id="fav-list">
+          <p style="color:var(--text-dim);font-size:0.82rem;">No favorites yet — star a chunk while memorizing.</p>
+        </div>
+      </div>
+
     </aside>
 
     <!-- ==================== MAIN PANEL ==================== -->
@@ -625,6 +696,7 @@
         </div>
         <div class="flex-row mt-8" id="memorize-actions" style="display:none;">
           <button class="btn btn-primary" id="go-test-btn">I'm ready — Test me →</button>
+          <button class="star-btn" id="star-btn" title="Save to favorites">☆</button>
         </div>
 
         <!-- Scratchpad — active recall through typing, clears on every tab switch -->
@@ -699,6 +771,7 @@
 const state = {
   user: null,
   history: [],
+  favorites: [],       // list of chunk_text strings
   chunks: [],
   chunkIndex: 0,
   currentChunk: null,
@@ -733,16 +806,76 @@ function renderHistory() {
     list.innerHTML = `<p style="color:var(--text-dim);font-size:0.82rem;">No attempts yet.</p>`;
     return;
   }
-  list.innerHTML = state.history.map(h => `
+  list.innerHTML = state.history.map(h => {
+    const isFav = state.favorites.includes(h.chunk_text);
+    return `
     <div class="history-item">
       <div class="h-text">${escHtml(h.chunk_text)}</div>
       <div class="h-meta">
         <span class="h-score ${scoreClass(h.accuracy)}">${h.accuracy}%</span>
         <span class="h-diff-tag">${h.difficulty}</span>
-        <span style="color:var(--text-dim);font-size:0.72rem;margin-left:auto;">${h.timestamp ? h.timestamp.slice(0,10) : ""}</span>
+        <button class="star-btn ${isFav ? "active" : ""}" style="margin-left:auto;font-size:0.9rem;"
+          data-chunk="${escHtml(h.chunk_text)}" onclick="toggleFavFromHistory(this)">${isFav ? "★" : "☆"}</button>
       </div>
+    </div>`;
+  }).join("");
+}
+
+function renderFavorites() {
+  const list = $("fav-list");
+  if (!state.favorites.length) {
+    list.innerHTML = `<p style="color:var(--text-dim);font-size:0.82rem;">No favorites yet — star a chunk while memorizing.</p>`;
+    return;
+  }
+  list.innerHTML = state.favorites.map(text => `
+    <div class="fav-item" onclick="loadFavorite(${JSON.stringify(text)})">
+      <span class="fav-text">${escHtml(text)}</span>
+      <button class="fav-remove" title="Remove from favorites"
+        onclick="event.stopPropagation(); removeFavorite(${JSON.stringify(text)})">✕</button>
     </div>
   `).join("");
+}
+
+async function toggleFavCurrent() {
+  const chunk = state.currentChunk?.text;
+  if (!chunk) return;
+  const data = await api("POST", "/api/favorites", { chunk_text: chunk });
+  state.favorites = data.favorites;
+  updateStarBtn(data.is_favorite);
+  renderFavorites();
+  renderHistory();   // refresh stars in history list
+}
+
+async function toggleFavFromHistory(btn) {
+  const chunk = btn.dataset.chunk;
+  const data  = await api("POST", "/api/favorites", { chunk_text: chunk });
+  state.favorites = data.favorites;
+  renderFavorites();
+  renderHistory();
+  // Also update the memorize star if the current chunk matches
+  if (state.currentChunk?.text === chunk) updateStarBtn(data.is_favorite);
+}
+
+async function removeFavorite(chunkText) {
+  const data = await api("POST", "/api/favorites", { chunk_text: chunkText });
+  state.favorites = data.favorites;
+  renderFavorites();
+  renderHistory();
+  if (state.currentChunk?.text === chunkText) updateStarBtn(data.is_favorite);
+}
+
+function loadFavorite(chunkText) {
+  // Inject the favorite as a single-chunk session so the user can memorize/test it
+  state.chunks = [{ id: "fav-" + Date.now(), text: chunkText, sentence_indices: [], score: 1 }];
+  setChunk(0);
+}
+
+function updateStarBtn(isFav) {
+  const btn = $("star-btn");
+  if (!btn) return;
+  btn.textContent  = isFav ? "★" : "☆";
+  btn.title        = isFav ? "Remove from favorites" : "Save to favorites";
+  btn.classList.toggle("active", isFav);
 }
 
 function escHtml(str) {
@@ -791,6 +924,9 @@ function setChunk(index) {
   $("prev-chunk-btn").disabled = state.chunkIndex === 0;
   $("next-chunk-btn").disabled = state.chunkIndex >= state.chunks.length - 1;
 
+  // Reflect whether this chunk is already a favorite
+  updateStarBtn(state.favorites.includes(state.currentChunk.text));
+
   showPhase("memorize");
 }
 
@@ -800,12 +936,14 @@ async function doLogin() {
   if (!username) return;
   try {
     const data = await api("POST", "/api/login", { username });
-    state.user = data.username;
-    state.history = data.history || [];
+    state.user      = data.username;
+    state.history   = data.history   || [];
+    state.favorites = data.favorites || [];
     $("login-screen").classList.add("hidden");
     $("app").classList.remove("hidden");
     $("user-pill").innerHTML = `Logged in as <strong>${escHtml(state.user)}</strong>`;
     renderHistory();
+    renderFavorites();
   } catch (err) {
     $("login-error").textContent = err.message;
     $("login-error").classList.remove("hidden");
@@ -814,9 +952,10 @@ async function doLogin() {
 
 async function doLogout() {
   await api("POST", "/api/logout");
-  state.user = null;
-  state.history = [];
-  state.chunks = [];
+  state.user      = null;
+  state.history   = [];
+  state.favorites = [];
+  state.chunks    = [];
   state.currentChunk = null;
   $("app").classList.add("hidden");
   $("login-screen").classList.remove("hidden");
@@ -968,6 +1107,7 @@ $("tab-result").addEventListener("click", () => {
 
 $("clear-last10-btn").addEventListener("click", () => clearHistory("last10"));
 $("clear-all-btn").addEventListener("click", () => clearHistory("all"));
+$("star-btn").addEventListener("click", toggleFavCurrent);
 </script>
 </body>
 </html>

@@ -287,7 +287,11 @@ def login():
     session["username"] = username
     profile = load_profile(username)
     save_profile(profile)   # create file if new user
-    return jsonify({"username": username, "history": profile["history"]})
+    return jsonify({
+        "username":  username,
+        "history":   profile["history"],
+        "favorites": profile.get("favorites", []),
+    })
 
 
 @app.post("/api/logout")
@@ -368,6 +372,35 @@ def add_history():
 
     save_profile(profile)
     return jsonify({"ok": True, "history": profile["history"]})
+
+
+@app.post("/api/favorites")
+def toggle_favorite():
+    # Toggle a chunk in/out of favorites.
+    # Body: { chunk_text: str }
+    # Returns: { favorites: [...], is_favorite: bool }
+    username = session.get("username")
+    if not username:
+        return jsonify({"error": "Not logged in."}), 401
+
+    data       = request.get_json(force=True)
+    chunk_text = (data.get("chunk_text") or "").strip()
+    if not chunk_text:
+        return jsonify({"error": "No chunk_text provided."}), 400
+
+    profile   = load_profile(username)
+    favorites = profile.setdefault("favorites", [])
+
+    # Toggle: remove if already present, add if not
+    if chunk_text in favorites:
+        favorites.remove(chunk_text)
+        is_favorite = False
+    else:
+        favorites.insert(0, chunk_text)   # newest first
+        is_favorite = True
+
+    save_profile(profile)
+    return jsonify({"favorites": favorites, "is_favorite": is_favorite})
 
 
 @app.delete("/api/history")
