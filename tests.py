@@ -371,12 +371,51 @@ class TestFlaskRoutes(unittest.TestCase):
         r = self.client.post("/api/history", json={"chunk_text": "x", "accuracy": 0})
         self.assertEqual(r.status_code, 401)
 
+    # ---- Favorites ----
+
+    def test_favorite_toggle_adds_chunk(self):
+        self.client.post("/api/login", json={"username": "favtest_add_user"})
+        r = self.client.post("/api/favorites", json={"chunk_text": "unique add chunk aaa"})
+        self.assertEqual(r.status_code, 200)
+        data = r.get_json()
+        self.assertTrue(data["is_favorite"])
+        self.assertIn("unique add chunk aaa", data["favorites"])
+
+    def test_favorite_toggle_removes_on_second_call(self):
+        self.client.post("/api/login", json={"username": "testuser"})
+        # Use a unique text so prior test state doesn't interfere
+        chunk = "unique toggle test chunk xyz"
+        self.client.post("/api/favorites", json={"chunk_text": chunk})  # add
+        r = self.client.post("/api/favorites", json={"chunk_text": chunk})  # remove
+        data = r.get_json()
+        self.assertFalse(data["is_favorite"])
+        self.assertNotIn(chunk, data["favorites"])
+
+    def test_favorite_requires_login(self):
+        r = self.client.post("/api/favorites", json={"chunk_text": "hello"})
+        self.assertEqual(r.status_code, 401)
+
+    def test_favorite_empty_chunk_returns_400(self):
+        self.client.post("/api/login", json={"username": "testuser"})
+        r = self.client.post("/api/favorites", json={"chunk_text": ""})
+        self.assertEqual(r.status_code, 400)
+
+    def test_login_returns_favorites(self):
+        self.client.post("/api/login", json={"username": "favtest_login_user"})
+        self.client.post("/api/favorites", json={"chunk_text": "unique login fav chunk bbb"})
+        self.client.post("/api/logout")
+        r = self.client.post("/api/login", json={"username": "favtest_login_user"})
+        data = r.get_json()
+        self.assertIn("favorites", data)
+        self.assertIn("unique login fav chunk bbb", data["favorites"])
+
     # ---- Index route ----
 
     def test_index_returns_html(self):
         r = self.client.get("/")
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"ProText Memory Quiz", r.data)
+        self.assertIn(b"Favorites", r.data)
 
 
 # ===========================================================================
