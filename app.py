@@ -211,23 +211,37 @@ def extract_chunks(text: str, difficulty: str, shuffle: bool) -> list[dict]:
 # Answer scoring — word-level diff between user answer and target text
 # ---------------------------------------------------------------------------
 
+def normalize(text: str) -> str:
+    """
+    Lenient mode pre-processor.
+    Lowercases the text and replaces every punctuation character with a space,
+    then collapses runs of whitespace so hyphenated terms split into separate
+    words rather than merging: "self-attention," -> "self attention"
+    """
+    table = str.maketrans(string.punctuation, " " * len(string.punctuation))
+    return " ".join(text.lower().translate(table).split())
+
+
 def _split_tokens(text: str) -> list[str]:
     """Split into non-whitespace tokens only (words, punctuation clusters)."""
     return re.findall(r"\S+", text)
 
 
-def score_answer(target: str, answer: str) -> dict:
+def score_answer(target: str, answer: str, lenient: bool = False) -> dict:
     """
     Performs a word-level SequenceMatcher diff between the user's answer
     and the target text.
+
+    lenient=True strips punctuation and lowercases both sides before
+    comparing, so "Self-attention," matches "self attention".
 
     Returns:
       accuracy          — float 0–100 (matching words / target words)
       annotated_target  — list of {text, correct: bool}
       annotated_answer  — list of {text, correct: bool}
     """
-    t_tokens = _split_tokens(target)
-    a_tokens = _split_tokens(answer)
+    t_tokens = _split_tokens(normalize(target) if lenient else target)
+    a_tokens = _split_tokens(normalize(answer) if lenient else answer)
 
     matcher  = SequenceMatcher(None, a_tokens, t_tokens, autojunk=False)
     opcodes  = matcher.get_opcodes()
@@ -314,14 +328,15 @@ def score():
     if not session.get("username"):
         return jsonify({"error": "Not logged in."}), 401
 
-    data   = request.get_json(force=True)
-    target = (data.get("target") or "").strip()
-    answer = (data.get("answer") or "").strip()
+    data    = request.get_json(force=True)
+    target  = (data.get("target") or "").strip()
+    answer  = (data.get("answer") or "").strip()
+    lenient = bool(data.get("lenient", False))
 
     if not target:
         return jsonify({"error": "No target text provided."}), 400
 
-    return jsonify(score_answer(target, answer))
+    return jsonify(score_answer(target, answer, lenient))
 
 
 @app.post("/api/history")
