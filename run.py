@@ -24,6 +24,7 @@ import webbrowser
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import app, set_password
+from vars import login_passcode
 
 
 def parse_args():
@@ -95,7 +96,7 @@ def main():
         print("  ⚠  Network mode: anyone on your WiFi can connect.")
         print("     Stop the server with Ctrl+C when done sharing.\n")
         # Enable password gate — only active when hosting for others
-        set_password("youre cool")
+        set_password(login_passcode)
 
     if not args.no_browser:
         open_browser(local_url)

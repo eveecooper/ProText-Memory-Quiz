@@ -1,32 +1,30 @@
 """
 app.py
 ------
-Flask backend for ProText Memory Quiz — a local memory-training quiz app.
+Flask backend for ProText Memory Quiz.
 
-This module is imported by run.py. Do not run directly.
-
-Routes
-------
-POST   /api/login     — start a named session (creates profile if new)
-POST   /api/logout    — clear session
-GET    /api/profile   — return current user + full history
-POST   /api/extract   — extract scored chunks from raw text
-POST   /api/score     — diff user answer vs target, return annotated result
-POST   /api/history   — save/update a completed attempt
-DELETE /api/history   — clear history (body: {"mode": "last10"|"all"})
+Routes:
+  GET    /              — serve the app
+  GET    /api/config    — check whether a session password is required
+  POST   /api/unlock    — submit the session password
+  POST   /api/login     — start a named session
+  POST   /api/logout    — clear session
+  GET    /api/profile   — return current user profile (history + favorites)
+  POST   /api/extract   — extract scored chunks from raw text
+  POST   /api/score     — diff answer vs target, return annotated result
+  POST   /api/history   — save/update a completed attempt
+  DELETE /api/history   — clear history (body: {"mode": "last10"|"all"})
+  POST   /api/favorites — toggle a chunk as a favorite
 """
 
 import json
-import os
+import random
 import re
 import string
 import uuid
 from difflib import SequenceMatcher
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# NLTK bootstrap — download only if data is missing
-# ---------------------------------------------------------------------------
 import nltk
 
 for _pkg, _kind in [("punkt", "tokenizers"), ("punkt_tab", "tokenizers"), ("stopwords", "corpora")]:
@@ -37,18 +35,14 @@ for _pkg, _kind in [("punkt", "tokenizers"), ("punkt_tab", "tokenizers"), ("stop
 
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize
-
-# ---------------------------------------------------------------------------
-# Flask setup
-# ---------------------------------------------------------------------------
 from flask import Flask, jsonify, request, send_from_directory, session
 
-BASE_DIR  = Path(__file__).parent
-DATA_DIR  = BASE_DIR / "data"
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
-app.secret_key = "protext-memory-quiz-local-secret"   # local use only - change if exposing to a network
+app.secret_key = "protext-memory-quiz-local-secret"
 
 STOP_WORDS = set(stopwords.words("english"))
 
@@ -59,21 +53,18 @@ STOP_WORDS = set(stopwords.words("english"))
 _HOST_PASSWORD: str | None = None
 
 
-def set_password(pw: str) -> None:
+def set_password(pw: str | None) -> None:
     global _HOST_PASSWORD
     _HOST_PASSWORD = pw
 
+
 # ---------------------------------------------------------------------------
-# Difficulty configuration
+# Difficulty presets
 #
-# The word-budget model maps to approximate "notable word" counts a human
-# working memory can hold:
-#   easy       ≈ 8 notable words  (a phrase or short sentence)
-#   medium     ≈ 16 notable words  (a couple of sentences)
-#   hard       ≈ 32 notable words  (a dense paragraph)
-#   extra_hard ≈ 64 notable words  (an extended paragraph)
-#   recite     — the entire document as one chunk
+# target_words is an approximate "notable word" budget mapping to human
+# working-memory thresholds (stop words excluded from the count).
 # ---------------------------------------------------------------------------
+
 DIFFICULTY = {
     "easy":       {"max_sentences": 2,    "target_words": 8},
     "medium":     {"max_sentences": 4,    "target_words": 16},
@@ -82,12 +73,12 @@ DIFFICULTY = {
     "recite":     {"max_sentences": 9999, "target_words": 9999},
 }
 
+
 # ---------------------------------------------------------------------------
 # Profile helpers — one JSON file per user in data/
 # ---------------------------------------------------------------------------
 
 def _safe_name(username: str) -> str:
-    """Sanitize username to a filesystem-safe string."""
     return re.sub(r"[^\w\-]", "_", username.strip().lower())
 
 
@@ -99,8 +90,10 @@ def load_profile(username: str) -> dict:
     p = profile_path(username)
     if p.exists():
         with open(p) as f:
-            return json.load(f)
-    return {"username": username, "history": []}
+            data = json.load(f)
+        data.setdefault("favorites", [])   # backfill older profiles
+        return data
+    return {"username": username, "history": [], "favorites": []}
 
 
 def save_profile(data: dict) -> None:
@@ -109,7 +102,7 @@ def save_profile(data: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Text scoring — heuristic technical-interest score per sentence
+# Text scoring — heuristic jargon-density score per sentence
 # ---------------------------------------------------------------------------
 
 def _notable_count(sentence: str) -> int:
@@ -121,33 +114,25 @@ def _notable_count(sentence: str) -> int:
 
 
 def score_sentence(sentence: str) -> float:
-    """
-    Returns a 0–1 score indicating technical/jargon density.
-
-    Signals rewarded:
-      - High ratio of non-stop-words  (notable_ratio)
-      - Sentence length near 20 words (length_score)
-      - Presence of CamelCase, acronyms, numbers, hyphens (jargon_score)
-    """
+    """Returns a 0-1 jargon-density score for a sentence."""
     words = sentence.split()
     if not words:
         return 0.0
 
-    notable = _notable_count(sentence)
-    notable_ratio = notable / len(words)
+    notable_ratio = _notable_count(sentence) / len(words)
 
     jargon_count = sum(
         1 for w in words if (
-            re.search(r"[A-Z][a-z]+[A-Z]", w)    # CamelCase / PascalCase
-            or re.fullmatch(r"[A-Z]{2,}", w)       # acronym (TCP, API …)
-            or "-" in w                             # hyphenated term
+            re.search(r"[A-Z][a-z]+[A-Z]", w)   # CamelCase / PascalCase
+            or re.fullmatch(r"[A-Z]{2,}", w)      # acronym (TCP, API …)
+            or "-" in w                            # hyphenated term
             or re.search(r"\d", w)                 # contains digit
-            or re.search(r"[%/\\()\[\]{}]", w)    # technical punctuation
+            or re.search(r"[%/\\()\[\]{}]", w)   # technical punctuation
         )
     )
 
-    length_score  = min(len(words) / 20, 1.0)     # peaks at ~20-word sentences
-    jargon_score  = min(jargon_count / 3, 1.0)
+    length_score = min(len(words) / 20, 1.0)   # peaks at ~20-word sentences
+    jargon_score = min(jargon_count / 3, 1.0)
 
     return (notable_ratio * 0.40) + (length_score * 0.35) + (jargon_score * 0.25)
 
@@ -158,26 +143,22 @@ def score_sentence(sentence: str) -> float:
 
 def extract_chunks(text: str, difficulty: str, shuffle: bool) -> list[dict]:
     """
-    Tokenizes text into sentences, scores each for technical interest,
-    and greedily groups them into chunks that fit the difficulty word budget.
+    Tokenizes text into sentences and greedily groups them into chunks
+    that fit within the notable-word budget for the given difficulty.
 
-    Returns a list of chunk dicts:
-      { id, text, sentence_indices, score }
-
-    If shuffle=True the list is returned in random order; otherwise document order.
+    Returns a list of chunk dicts: {id, text, sentence_indices, score}
     """
-    cfg = DIFFICULTY.get(difficulty, DIFFICULTY["easy"])
+    cfg       = DIFFICULTY.get(difficulty, DIFFICULTY["easy"])
     sentences = sent_tokenize(text.strip())
     if not sentences:
         return []
 
-    # Recite mode: return the entire text as one chunk
     if difficulty == "recite":
         return [{
-            "id": str(uuid.uuid4()),
-            "text": text.strip(),
+            "id":               str(uuid.uuid4()),
+            "text":             text.strip(),
             "sentence_indices": list(range(len(sentences))),
-            "score": 1.0,
+            "score":            1.0,
         }]
 
     scored = [
@@ -187,10 +168,8 @@ def extract_chunks(text: str, difficulty: str, shuffle: bool) -> list[dict]:
 
     max_s    = cfg["max_sentences"]
     target_w = cfg["target_words"]
-
-    # Greedy pass: walk sentences in document order, accumulating into a chunk
-    # until we hit the word budget or the sentence cap.
     chunks, i = [], 0
+
     while i < len(scored):
         bucket, word_budget = [], 0
         j = i
@@ -204,58 +183,55 @@ def extract_chunks(text: str, difficulty: str, shuffle: bool) -> list[dict]:
 
         if bucket:
             chunks.append({
-                "id": str(uuid.uuid4()),
-                "text": " ".join(b["text"] for b in bucket),
+                "id":               str(uuid.uuid4()),
+                "text":             " ".join(b["text"] for b in bucket),
                 "sentence_indices": [b["index"] for b in bucket],
-                "score": sum(b["score"] for b in bucket) / len(bucket),
+                "score":            sum(b["score"] for b in bucket) / len(bucket),
             })
         i = j
 
     if shuffle:
-        import random
         random.shuffle(chunks)
 
     return chunks
 
 
 # ---------------------------------------------------------------------------
-# Answer scoring — word-level diff between user answer and target text
+# Answer scoring — word-level diff between answer and target
 # ---------------------------------------------------------------------------
 
 def _split_tokens(text: str) -> list[str]:
-    """Split into non-whitespace tokens only (words, punctuation clusters)."""
     return re.findall(r"\S+", text)
 
 
-def normalize(text: str) -> str:
-    """Remove punctuation and capitalization from text."""
-    return text.lower().translate(str.maketrans("", "", string.punctuation))
+def _normalize_lenient(text: str) -> str:
+    """Lowercase, expand hyphens to spaces, strip remaining punctuation."""
+    return text.lower().replace("-", " ").translate(str.maketrans("", "", string.punctuation))
 
 
 def score_answer(target: str, answer: str, lenient: bool = False) -> dict:
     """
-    Performs a word-level SequenceMatcher diff between the user's answer
-    and the target text.
+    Word-level SequenceMatcher diff between answer and target.
+
+    lenient=True: lowercases, strips punctuation, and expands hyphenated
+    words before comparing, so capitalization and punctuation are forgiven.
 
     Returns:
-      accuracy          — float 0–100 (matching words / target words)
-      annotated_target  — list of {text, correct: bool}
-      annotated_answer  — list of {text, correct: bool}
+      accuracy         — float 0-100 (matching words / target words)
+      annotated_target — list of {text, correct}
+      annotated_answer — list of {text, correct}
     """
-   
-    if lenient: 
-        t = normalize(target)
-        a = normalize(answer)
+    if lenient:
+        t_tokens = _split_tokens(_normalize_lenient(target))
+        a_tokens = _split_tokens(_normalize_lenient(answer))
+    else:
+        t_tokens = _split_tokens(target)
+        a_tokens = _split_tokens(answer)
 
-    t_tokens = _split_tokens(target)
-    a_tokens = _split_tokens(answer)
+    matcher = SequenceMatcher(None, a_tokens, t_tokens, autojunk=False)
+    opcodes = matcher.get_opcodes()
 
-    matcher  = SequenceMatcher(None, a_tokens, t_tokens, autojunk=False)
-    opcodes  = matcher.get_opcodes()
-
-    # Build annotated token lists
     annotated_target, annotated_answer = [], []
-
     for tag, i1, i2, j1, j2 in opcodes:
         correct = (tag == "equal")
         for tok in t_tokens[j1:j2]:
@@ -263,20 +239,18 @@ def score_answer(target: str, answer: str, lenient: bool = False) -> dict:
         for tok in a_tokens[i1:i2]:
             annotated_answer.append({"text": tok, "correct": correct})
 
-    matching = sum(
-        (j2 - j1) for tag, i1, i2, j1, j2 in opcodes if tag == "equal"
-    )
+    matching = sum(j2 - j1 for tag, i1, i2, j1, j2 in opcodes if tag == "equal")
     accuracy = round(100 * matching / max(len(t_tokens), 1), 1)
 
     return {
-        "accuracy":          accuracy,
-        "annotated_target":  annotated_target,
-        "annotated_answer":  annotated_answer,
+        "accuracy":         accuracy,
+        "annotated_target": annotated_target,
+        "annotated_answer": annotated_answer,
     }
 
 
 # ---------------------------------------------------------------------------
-# Flask routes
+# Routes
 # ---------------------------------------------------------------------------
 
 @app.get("/")
@@ -311,16 +285,20 @@ def login():
 
     session["username"] = username
     profile = load_profile(username)
-    save_profile(profile)   # create file if new user
-    return jsonify({"username": username, "history": profile["history"]})
+    save_profile(profile)
+    return jsonify({
+        "username":  username,
+        "history":   profile["history"],
+        "favorites": profile["favorites"],
+    })
 
 
 @app.post("/api/logout")
 def logout():
-    unlocked = session.get("unlocked", False)
+    was_unlocked = session.get("unlocked", False)
     session.clear()
-    if unlocked:
-        session["unlocked"] = True  # keep unlock across username logout
+    if was_unlocked:
+        session["unlocked"] = True   # keep unlock across username switches
     return jsonify({"ok": True})
 
 
@@ -356,14 +334,15 @@ def score():
     if not session.get("username"):
         return jsonify({"error": "Not logged in."}), 401
 
-    data   = request.get_json(force=True)
-    target = (data.get("target") or "").strip()
-    answer = (data.get("answer") or "").strip()
+    data    = request.get_json(force=True)
+    target  = (data.get("target") or "").strip()
+    answer  = (data.get("answer") or "").strip()
+    lenient = bool(data.get("lenient", False))
 
     if not target:
         return jsonify({"error": "No target text provided."}), 400
 
-    return jsonify(score_answer(target, answer))
+    return jsonify(score_answer(target, answer, lenient=lenient))
 
 
 @app.post("/api/history")
@@ -375,10 +354,10 @@ def add_history():
     data    = request.get_json(force=True)
     profile = load_profile(username)
 
-    # If this exact chunk has been attempted before, keep only the best score.
+    # Keep only the best score per unique chunk
     existing = next(
         (h for h in profile["history"] if h.get("chunk_text") == data.get("chunk_text")),
-        None
+        None,
     )
     if existing:
         if data.get("accuracy", 0) > existing["accuracy"]:
@@ -407,8 +386,33 @@ def clear_history():
     mode    = data.get("mode", "all")
     profile = load_profile(username)
 
-    # "last10" removes the 10 oldest entries (history is newest-first)
+    # "last10" drops the 10 most-recent entries; history is stored newest-first
     profile["history"] = profile["history"][10:] if mode == "last10" else []
 
     save_profile(profile)
     return jsonify({"ok": True, "history": profile["history"]})
+
+
+@app.post("/api/favorites")
+def toggle_favorite():
+    username = session.get("username")
+    if not username:
+        return jsonify({"error": "Not logged in."}), 401
+
+    data       = request.get_json(force=True)
+    chunk_text = (data.get("chunk_text") or "").strip()
+    if not chunk_text:
+        return jsonify({"error": "chunk_text cannot be empty."}), 400
+
+    profile   = load_profile(username)
+    favorites = profile.setdefault("favorites", [])
+
+    if chunk_text in favorites:
+        favorites.remove(chunk_text)
+        is_favorite = False
+    else:
+        favorites.append(chunk_text)
+        is_favorite = True
+
+    save_profile(profile)
+    return jsonify({"is_favorite": is_favorite, "favorites": favorites})

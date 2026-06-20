@@ -1,6 +1,8 @@
 # ProText Memory Quiz
 
-A local memory-training app for technical text. Paste dense documentation, research papers, or spec sheets — whatever you want for memory training. The app extracts high-jargon chunks, runs you through a recall test, and scores your answer.
+A local memory-training app for technical text. Paste dense documentation, research papers, or spec sheets — the app extracts the most information-dense chunks, quizzes you on recalling them, and scores your answer word by word.
+
+Everything runs locally. No account, no internet connection required.
 
 ---
 
@@ -11,7 +13,6 @@ A local memory-training app for technical text. Paste dense documentation, resea
 pip install -r requirements.txt
 
 # 2. Run the app
-cd protext_memory_quiz
 python run.py
 ```
 
@@ -19,109 +20,67 @@ The browser opens automatically at `http://127.0.0.1:5000`.
 
 ---
 
-## Directory Layout
+## Command-Line Options
 
 ```
-protext_memory_quiz/
-├── run.py          ← console launcher (start here)
-├── app.py          ← Flask backend + NLP logic
-├── templates/
-│   └── index.html  ← single-page frontend (HTML + vanilla JS)
-├── static/         ← reserved for future assets
-└── data/           ← per-user JSON profiles (auto-created on first login)
+python run.py [--host] [--port PORT] [--no-browser] [--debug]
+
+  --host        Share the app with other devices on your local network
+  --port PORT   Port to bind to (default: 5000)
+  --no-browser  Don't auto-open the browser on startup
+  --debug       Enable Flask debug/hot-reload mode (dev only)
+```
+
+When running with `--host`, a password is required to log in. Set the password by creating a file called `vars.py` in the project folder and assigning a `login_passcode` variable to the password of your choice as shown below.
+
+## vars.py 
+
+```
+login_passcode = "passwording"
 ```
 
 ---
 
-## Command-Line Options
+## How to Use
 
-```
-python run.py [--port PORT] [--no-browser] [--debug]
-
-Options:
-  --port PORT      Port to bind to (default: 5000)
-  --no-browser     Don't auto-open the browser on startup
-  --debug          Enable Flask debug/hot-reload mode (dev only)
-```
+1. **Enter your name** on the login screen.
+2. **Paste any text** — documentation, a paper, a spec — into the text box.
+3. **Choose a difficulty** and hit **Start Quiz**.
+4. The app shows you a chunk of text. Read it, then try to recall it word for word.
+5. Submit your answer and see which words you got right (green) or missed (red).
+6. Your best score for each chunk is saved automatically.
 
 ---
 
 ## Difficulty Levels
 
-| Level       | Max sentences | Notable-word budget |
-|-------------|---------------|---------------------|
-| Easy        | 2             | ~8 words           |
-| Medium      | 4             | ~16 words           |
-| Hard        | 8             | ~32 words           |
-| Extra Hard  | 12            | ~64 words           |
-| Recite      | entire doc    | unlimited           |
-
-"Notable words" excludes common stop words (a, the, of, for …).
-The budgets map to rough human working-memory thresholds.
-
----
-
-## How Chunk Extraction Works
-
-No API calls are made. Everything runs locally using NLTK.
-
-1. The text is tokenized into sentences with NLTK's `sent_tokenize`.
-2. Each sentence receives a jargon-density score (0–1) based on:
-   - Ratio of non-stop-words
-   - Sentence length (sweet spot ~20 words)
-   - Presence of CamelCase, acronyms, digits, hyphens, technical punctuation
-3. Sentences are grouped greedily in document order until the word budget
-   for the chosen difficulty is reached.
-4. If "Shuffle" is enabled, chunk order is randomized; otherwise document order is preserved.
+| Level      | Chunk size (approx.)     |
+|------------|--------------------------|
+| Easy       | ~1–2 sentences           |
+| Medium     | ~2–4 sentences           |
+| Hard       | ~4–8 sentences           |
+| Extra Hard | ~8–12 sentences          |
+| Recite     | The entire text at once  |
 
 ---
 
 ## Scoring
 
-Answers are compared against the target text using Python's `difflib.SequenceMatcher`
-at the word level. The accuracy percentage is:
+Your answer is compared to the target word by word. The accuracy percentage is:
 
     matching words / total words in target × 100
 
-Each word in both the answer and the target is highlighted green (correct) or
-red (incorrect/missing) in the result view.
+**Lenient mode** (toggle in the app) forgives capitalization differences, punctuation, and hyphenated words split across spaces — so `self attention` scores the same as `self-attention`.
 
 ---
 
-## User Profiles
+## Your History
 
-- Profiles are plain JSON files stored in `data/<username>.json`.
-- Login is name-only — no password, no authentication. Local use only.
-- History tracks best score per unique chunk. Subsequent attempts only
-  update the record if the new score is higher.
-- You can clear the last 10 entries or all history from the sidebar.
-
----
-
-## Dependencies
-
-| Package | Purpose                                |
-|---------|----------------------------------------|
-| Flask   | HTTP server and routing                |
-| NLTK    | Sentence tokenization + stop words     |
-
-NLTK data (`punkt`, `punkt_tab`, `stopwords`) is downloaded automatically
-on first run if not already present.
+- Your best score per chunk is saved to your profile.
+- Subsequent attempts only update the record if your new score is higher.
+- You can clear your 10 most recent entries or all history from the sidebar.
+- Chunks can be saved to **Favorites** for quick access to your practice material.
 
 ---
 
-## Extending the App
 
-The codebase is intentionally minimal to stay easy to read and modify.
-
-**Swap in a local LLM for chunk selection:**
-Replace `extract_chunks()` in `app.py` with a call to Ollama, llama.cpp,
-or any locally-served model. The route contract (`POST /api/extract` returning
-`{chunks: [...]}`) doesn't change, so the frontend needs no edits.
-
-**Add more difficulty levels:**
-Edit the `DIFFICULTY` dict near the top of `app.py`.
-
-**Persist session across browser restarts:**
-Change `app.secret_key` to a fixed value and configure Flask-Session
-with a file or Redis backend.
