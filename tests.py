@@ -242,7 +242,30 @@ class TestFlaskRoutes(unittest.TestCase):
 
     # ---- Login / logout ----
 
+    def _unlock(self):
+        # Helper: unlocks the session with the correct password before login
+        self.client.post("/api/unlock", json={"password": "youre cool"})
+
+    def test_unlock_correct_password(self):
+        r = self.client.post("/api/unlock", json={"password": "youre cool"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.get_json()["ok"])
+
+    def test_unlock_wrong_password(self):
+        r = self.client.post("/api/unlock", json={"password": "wrong"})
+        self.assertEqual(r.status_code, 403)
+
+    def test_unlock_empty_password(self):
+        r = self.client.post("/api/unlock", json={"password": ""})
+        self.assertEqual(r.status_code, 403)
+
+    def test_login_blocked_without_unlock(self):
+        # Intentionally no _unlock() call — session is fresh
+        r = self.client.post("/api/login", json={"username": "testuser"})
+        self.assertEqual(r.status_code, 403)
+
     def test_login_success(self):
+        self._unlock()
         r = self.client.post("/api/login", json={"username": "testuser"})
         self.assertEqual(r.status_code, 200)
         data = r.get_json()
@@ -250,14 +273,17 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertIn("history", data)
 
     def test_login_empty_username_returns_400(self):
+        self._unlock()
         r = self.client.post("/api/login", json={"username": ""})
         self.assertEqual(r.status_code, 400)
 
     def test_login_whitespace_username_returns_400(self):
+        self._unlock()
         r = self.client.post("/api/login", json={"username": "   "})
         self.assertEqual(r.status_code, 400)
 
     def test_logout_clears_session(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/logout")
         self.assertEqual(r.status_code, 200)
@@ -272,6 +298,7 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(r.status_code, 401)
 
     def test_profile_returns_after_login(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.get("/api/profile")
         self.assertEqual(r.status_code, 200)
@@ -284,6 +311,7 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(r.status_code, 401)
 
     def test_extract_returns_chunks(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/extract", json={
             "text":       TECHNICAL_TEXT,
@@ -296,11 +324,13 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertGreater(data["total"], 0)
 
     def test_extract_empty_text_returns_400(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/extract", json={"text": "", "difficulty": "easy"})
         self.assertEqual(r.status_code, 400)
 
     def test_extract_invalid_difficulty_returns_400(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/extract", json={"text": TECHNICAL_TEXT, "difficulty": "godmode"})
         self.assertEqual(r.status_code, 400)
@@ -312,12 +342,14 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(r.status_code, 401)
 
     def test_score_perfect_answer(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/score", json={"target": "hello world", "answer": "hello world"})
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.get_json()["accuracy"], 100.0)
 
     def test_score_lenient_mode_via_route(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/score", json={
             "target": "Self-attention, sometimes called intra-attention.",
@@ -328,6 +360,7 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(r.get_json()["accuracy"], 100.0)
 
     def test_score_empty_target_returns_400(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/score", json={"target": "", "answer": "something"})
         self.assertEqual(r.status_code, 400)
@@ -335,6 +368,7 @@ class TestFlaskRoutes(unittest.TestCase):
     # ---- History ----
 
     def test_history_save_and_retrieve(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/history", json={
             "chunk_text": "test chunk",
@@ -347,6 +381,7 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertTrue(any(h["chunk_text"] == "test chunk" for h in history))
 
     def test_history_best_score_only_updates_on_improvement(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         payload = {"chunk_text": "unique chunk abc", "difficulty": "easy", "timestamp": "2025-01-01"}
 
@@ -359,6 +394,7 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(entry["accuracy"], 80.0)
 
     def test_history_clear_all(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         self.client.post("/api/history", json={
             "chunk_text": "to be deleted", "difficulty": "easy", "accuracy": 50.0, "timestamp": ""
@@ -374,7 +410,10 @@ class TestFlaskRoutes(unittest.TestCase):
     # ---- Favorites ----
 
     def test_favorite_toggle_adds_chunk(self):
-        self.client.post("/api/login", json={"username": "favtest_add_user"})
+        self._unlock()
+        import uuid
+        user = f"favtest_{uuid.uuid4().hex[:8]}"
+        self.client.post("/api/login", json={"username": user})
         r = self.client.post("/api/favorites", json={"chunk_text": "unique add chunk aaa"})
         self.assertEqual(r.status_code, 200)
         data = r.get_json()
@@ -382,6 +421,7 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertIn("unique add chunk aaa", data["favorites"])
 
     def test_favorite_toggle_removes_on_second_call(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         # Use a unique text so prior test state doesn't interfere
         chunk = "unique toggle test chunk xyz"
@@ -396,15 +436,20 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(r.status_code, 401)
 
     def test_favorite_empty_chunk_returns_400(self):
+        self._unlock()
         self.client.post("/api/login", json={"username": "testuser"})
         r = self.client.post("/api/favorites", json={"chunk_text": ""})
         self.assertEqual(r.status_code, 400)
 
     def test_login_returns_favorites(self):
-        self.client.post("/api/login", json={"username": "favtest_login_user"})
+        import uuid
+        user = f"favlogin_{uuid.uuid4().hex[:8]}"
+        self._unlock()
+        self.client.post("/api/login", json={"username": user})
         self.client.post("/api/favorites", json={"chunk_text": "unique login fav chunk bbb"})
         self.client.post("/api/logout")
-        r = self.client.post("/api/login", json={"username": "favtest_login_user"})
+        self._unlock()
+        r = self.client.post("/api/login", json={"username": user})
         data = r.get_json()
         self.assertIn("favorites", data)
         self.assertIn("unique login fav chunk bbb", data["favorites"])

@@ -591,9 +591,25 @@
 <body>
 
 <!-- ============================================================
+     PASSWORD GATE (shown first if server has a password set)
+============================================================ -->
+<div id="password-screen">
+  <div class="login-box">
+    <div class="login-logo">ProText Memory Quiz</div>
+    <p class="login-sub">Enter the access password to continue.</p>
+    <div>
+      <label for="password-input">Password</label>
+      <input type="password" id="password-input" placeholder="Password" autocomplete="off" />
+    </div>
+    <button class="btn btn-primary btn-full" id="password-btn">Unlock →</button>
+    <div id="password-error" class="alert alert-error hidden"></div>
+  </div>
+</div>
+
+<!-- ============================================================
      LOGIN SCREEN
 ============================================================ -->
-<div id="login-screen">
+<div id="login-screen" class="hidden">
   <div class="login-box">
     <div class="login-logo">ProText Memory Quiz</div>
     <p class="login-sub">Memory training for technical text.</p>
@@ -930,6 +946,24 @@ function setChunk(index) {
   showPhase("memorize");
 }
 
+// ---- Password gate ----
+async function doUnlock() {
+  const password = $("password-input").value;
+  if (!password) return;
+  try {
+    await api("POST", "/api/unlock", { password });
+    // Password accepted — move to the name login screen
+    $("password-screen").classList.add("hidden");
+    $("login-screen").classList.remove("hidden");
+    $("login-name").focus();
+  } catch (err) {
+    $("password-error").textContent = err.message;
+    $("password-error").classList.remove("hidden");
+    $("password-input").value = "";
+    $("password-input").focus();
+  }
+}
+
 // ---- Login ----
 async function doLogin() {
   const username = $("login-name").value.trim();
@@ -958,8 +992,10 @@ async function doLogout() {
   state.chunks    = [];
   state.currentChunk = null;
   $("app").classList.add("hidden");
-  $("login-screen").classList.remove("hidden");
+  $("login-screen").classList.add("hidden");
+  $("password-screen").classList.remove("hidden");
   $("login-name").value = "";
+  $("password-input").value = "";
   $("chunk-nav").style.display = "none";
   $("memorize-display").classList.add("empty");
   $("memorize-display").textContent = "Extract chunks from the sidebar to begin.";
@@ -1060,6 +1096,8 @@ async function clearHistory(mode) {
 }
 
 // ---- Event listeners ----
+$("password-btn").addEventListener("click", doUnlock);
+$("password-input").addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
 $("login-btn").addEventListener("click", doLogin);
 $("login-name").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
 $("logout-btn").addEventListener("click", doLogout);

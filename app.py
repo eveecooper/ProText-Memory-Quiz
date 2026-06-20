@@ -50,6 +50,12 @@ DATA_DIR.mkdir(exist_ok=True)
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = "protext-memory-quiz-local-secret"   # local use only; change if exposing to a network
 
+# ---------------------------------------------------------------------------
+# Shared access password
+# Change this to whatever you want. Set to None to disable the password gate.
+# ---------------------------------------------------------------------------
+ACCESS_PASSWORD = "youre cool"
+
 STOP_WORDS = set(stopwords.words("english"))
 
 # ---------------------------------------------------------------------------
@@ -277,8 +283,30 @@ def index():
     return send_from_directory("templates", "index.html")
 
 
+@app.post("/api/unlock")
+def unlock():
+    # Checks the shared access password.
+    # On success, marks the session as unlocked.
+    # If ACCESS_PASSWORD is None, always grants access.
+    if ACCESS_PASSWORD is None:
+        session["unlocked"] = True
+        return jsonify({"ok": True})
+
+    data     = request.get_json(force=True)
+    password = (data.get("password") or "").strip()
+
+    if password == ACCESS_PASSWORD:
+        session["unlocked"] = True
+        return jsonify({"ok": True})
+    else:
+        return jsonify({"error": "Wrong password."}), 403
+
+
 @app.post("/api/login")
 def login():
+    if not session.get("unlocked") and ACCESS_PASSWORD is not None:
+        return jsonify({"error": "Not unlocked."}), 403
+
     data     = request.get_json(force=True)
     username = (data.get("username") or "").strip()
     if not username:
@@ -296,7 +324,7 @@ def login():
 
 @app.post("/api/logout")
 def logout():
-    session.clear()
+    session.clear()   # clears both "unlocked" and "username"
     return jsonify({"ok": True})
 
 
