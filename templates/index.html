@@ -720,9 +720,9 @@
 
       <!-- Phase tabs -->
       <div class="phase-tabs">
-        <button class="phase-tab active" id="tab-memorize" data-phase="memorize">① Memorize</button>
-        <button class="phase-tab" id="tab-test" data-phase="test">② Test</button>
-        <button class="phase-tab hidden" id="tab-result" data-phase="result">③ Result</button>
+        <button class="phase-tab active" id="tab-memorize" data-phase="memorize">1. Memorize</button>
+        <button class="phase-tab" id="tab-test" data-phase="test">2. Test</button>
+        <button class="phase-tab hidden" id="tab-result" data-phase="result">3. Result</button>
       </div>
 
       <!-- Chunk navigation -->
@@ -759,14 +759,7 @@
         <div class="card">
           <div class="card-title">Recall — type what you remember</div>
           <div class="test-area">
-            <textarea id="answer-input" rows="7" placeholder="Type as much as you can recall. Capitalization and punctuation do affect scoring, so aim for accuracy."></textarea>
-          </div>
-          <div class="toggle-row mt-8">
-            <span>Lenient mode — ignore punctuation &amp; capitalization</span>
-            <label class="toggle">
-              <input type="checkbox" id="lenient-toggle" />
-              <span class="toggle-slider"></span>
-            </label>
+            <textarea id="answer-input" rows="7" placeholder="Type as much as you can recall. Punctuation and capitalization are ignored by default (lenient mode on)."></textarea>
           </div>
           <div class="flex-row mt-8">
             <button class="btn btn-primary" id="submit-btn">Grade my answer →</button>
@@ -800,6 +793,15 @@
             <div class="diff-block" id="diff-target"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Persistent lenient scoring toggle — visible on all tabs once chunks are loaded -->
+      <div id="lenient-row" class="toggle-row mt-8" style="display:none;">
+        <span>Lenient scoring — ignore punctuation &amp; capitalization</span>
+        <label class="toggle">
+          <input type="checkbox" id="lenient-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
       </div>
 
     </section>
@@ -964,6 +966,7 @@ function setChunk(index) {
 
   // Update nav
   $("chunk-nav").style.display = "flex";
+  $("lenient-row").style.display = "flex";
   $("chunk-progress").textContent = `${state.chunkIndex + 1} / ${state.chunks.length}`;
   $("prev-chunk-btn").disabled = state.chunkIndex === 0;
   $("next-chunk-btn").disabled = state.chunkIndex >= state.chunks.length - 1;
