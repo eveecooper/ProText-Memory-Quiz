@@ -23,15 +23,17 @@ The browser opens automatically at `http://127.0.0.1:5000`.
 ## Command-Line Options
 
 ```
-python run.py [--host] [--port PORT] [--no-browser] [--debug]
+python run.py [--host] [--public] [--port PORT] [--no-browser] [--debug]
 
-  --host        Share the app with other devices on your local network
-  --port PORT   Port to bind to (default: 5000)
-  --no-browser  Don't auto-open the browser on startup
-  --debug       Enable Flask debug/hot-reload mode (dev only)
+    python run.py                  Local only (default)
+    python run.py --host           Share with others on your network (LAN)
+    python run.py --public         Share publicly via Cloudflare Tunnel
+    python run.py --port 8080      Port to bind to (default: 5000)
+    python run.py --no-browser     Don't auto-open the browser on startup
+    python run.py --debug          Enable Flask debug/hot-reload mode (dev only)
 ```
 
-When running with `--host`, a password is required to log in. Set the password by creating a file called `vars.py` in the project folder and assigning a `login_passcode` variable to the password of your choice as shown below.
+When running with `--host` or `--public`, a password is required to log in. Set the password by creating a file called `vars.py` in the project folder and assigning a `login_passcode` variable to the password of your choice as shown below.
 
 ## vars.py 
 
