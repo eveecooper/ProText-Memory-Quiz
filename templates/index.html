@@ -694,7 +694,7 @@
           <button class="btn btn-ghost btn-sm" id="load-example-btn">Load example ↓</button>
         </div>
         <div id="example-list" class="hidden" style="margin-bottom:8px;"></div>
-        <textarea id="source-text" rows="8" placeholder="Paste any text here — documentation, research papers, textbook excerpts, RFC specs, anything dense with technical content you want to memorize."></textarea>
+        <textarea id="source-text" rows="8" autocomplete="off" placeholder="Paste any text here — documentation, research papers, textbook excerpts, RFC specs, anything dense with technical content you want to memorize."></textarea>
         <div class="mt-8">
           <label for="difficulty-select">Difficulty</label>
           <select id="difficulty-select">
@@ -744,7 +744,7 @@
       <div id="landing-screen">
         <div class="landing-box">
           <p class="landing-welcome">Paste technical text to memorize — docs, papers, specs — or start with a built-in example.</p>
-          <textarea id="landing-text" rows="7" placeholder="Paste any dense technical text here…"></textarea>
+          <textarea id="landing-text" rows="7" autocomplete="off" placeholder="Paste any dense technical text here…"></textarea>
           <div id="landing-example-list" class="hidden" style="margin-bottom:4px;"></div>
           <div class="flex-row mt-8" style="flex-wrap:wrap;gap:8px;">
             <button class="btn btn-ghost btn-sm" id="landing-example-btn">Load example ↓</button>
@@ -792,6 +792,7 @@
           <textarea
             id="scratchpad"
             rows="5"
+            autocomplete="off"
             placeholder="Type the text here to burn it in. Not graded — just for active recall practice through writing."
           ></textarea>
         </div>
@@ -802,7 +803,7 @@
         <div class="card">
           <div class="card-title">Recall — type what you remember</div>
           <div class="test-area">
-            <textarea id="answer-input" rows="7" placeholder="Type as much as you can recall. Punctuation and capitalization are ignored by default (lenient mode on)."></textarea>
+            <textarea id="answer-input" rows="7" autocomplete="off" placeholder="Type as much as you can recall. Punctuation and capitalization are ignored by default (lenient mode on)."></textarea>
           </div>
           <div class="flex-row mt-8">
             <button class="btn btn-primary" id="submit-btn">Grade my answer →</button>
