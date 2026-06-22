@@ -86,7 +86,7 @@
   main {
     flex: 1;
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 1fr;
     gap: 0;
     max-width: 1200px;
     width: 100%;
@@ -95,11 +95,33 @@
     gap: 24px;
   }
 
+  main.sidebar-open {
+    grid-template-columns: 280px 1fr;
+  }
+
   /* ---- Sidebar ---- */
   .sidebar {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  main.sidebar-open .sidebar {
+    display: flex;
+  }
+
+  /* ---- Landing screen ---- */
+  .landing-box {
+    max-width: 560px;
+    margin: 40px auto;
     display: flex;
     flex-direction: column;
     gap: 16px;
+  }
+
+  .landing-welcome {
+    font-size: 1rem;
+    color: var(--text-dim);
   }
 
   .card {
@@ -606,7 +628,7 @@
   .fav-remove:hover { color: var(--danger); }
 
   @media (max-width: 780px) {
-    main { grid-template-columns: 1fr; }
+    main.sidebar-open { grid-template-columns: 1fr; }
     .sidebar { order: 2; }
     .main-panel { order: 1; }
   }
@@ -718,15 +740,36 @@
     <!-- ==================== MAIN PANEL ==================== -->
     <section class="main-panel">
 
+      <!-- LANDING SCREEN — shown on first load, hidden after extraction -->
+      <div id="landing-screen">
+        <div class="landing-box">
+          <p class="landing-welcome">Paste technical text to memorize — docs, papers, specs — or start with a built-in example.</p>
+          <textarea id="landing-text" rows="7" placeholder="Paste any dense technical text here…"></textarea>
+          <div id="landing-example-list" class="hidden" style="margin-bottom:4px;"></div>
+          <div class="flex-row mt-8" style="flex-wrap:wrap;gap:8px;">
+            <button class="btn btn-ghost btn-sm" id="landing-example-btn">Load example ↓</button>
+            <select id="landing-difficulty">
+              <option value="easy">Easy</option>
+              <option value="medium" selected>Medium</option>
+              <option value="hard">Hard</option>
+              <option value="extra_hard">Extra Hard</option>
+              <option value="recite">Recite</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-full mt-8" id="landing-extract-btn">Start studying →</button>
+        </div>
+      </div>
+
       <!-- Phase tabs -->
-      <div class="phase-tabs">
-        <button class="phase-tab active" id="tab-memorize" data-phase="memorize">① Memorize</button>
-        <button class="phase-tab" id="tab-test" data-phase="test">② Test</button>
-        <button class="phase-tab hidden" id="tab-result" data-phase="result">③ Result</button>
+      <div class="phase-tabs" id="phase-tabs" style="display:none;">
+        <button class="phase-tab active" id="tab-memorize" data-phase="memorize">1. Memorize</button>
+        <button class="phase-tab" id="tab-test" data-phase="test">2. Test</button>
+        <button class="phase-tab hidden" id="tab-result" data-phase="result">3. Result</button>
       </div>
 
       <!-- Chunk navigation -->
       <div class="chunk-nav" id="chunk-nav" style="display:none;">
+        <button class="btn btn-ghost btn-sm" id="sidebar-toggle-btn" title="History &amp; Favorites">☰</button>
         <button class="btn btn-ghost btn-sm" id="prev-chunk-btn">← Prev</button>
         <span class="progress" id="chunk-progress">—</span>
         <button class="btn btn-ghost btn-sm" id="next-chunk-btn">Next →</button>
@@ -734,7 +777,7 @@
       </div>
 
       <!-- ---- MEMORIZE PHASE ---- -->
-      <div id="phase-memorize">
+      <div id="phase-memorize" class="hidden">
         <div class="memorize-block empty" id="memorize-display">
           Extract chunks from the sidebar to begin.
         </div>
@@ -759,14 +802,7 @@
         <div class="card">
           <div class="card-title">Recall — type what you remember</div>
           <div class="test-area">
-            <textarea id="answer-input" rows="7" placeholder="Type as much as you can recall. Capitalization and punctuation do affect scoring, so aim for accuracy."></textarea>
-          </div>
-          <div class="toggle-row mt-8">
-            <span>Lenient mode — ignore punctuation &amp; capitalization</span>
-            <label class="toggle">
-              <input type="checkbox" id="lenient-toggle" />
-              <span class="toggle-slider"></span>
-            </label>
+            <textarea id="answer-input" rows="7" placeholder="Type as much as you can recall. Punctuation and capitalization are ignored by default (lenient mode on)."></textarea>
           </div>
           <div class="flex-row mt-8">
             <button class="btn btn-primary" id="submit-btn">Grade my answer →</button>
@@ -800,6 +836,15 @@
             <div class="diff-block" id="diff-target"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Persistent lenient scoring toggle — visible on all tabs once chunks are loaded -->
+      <div id="lenient-row" class="toggle-row mt-8" style="display:none;">
+        <span>Lenient scoring — ignore punctuation &amp; capitalization</span>
+        <label class="toggle">
+          <input type="checkbox" id="lenient-toggle" checked />
+          <span class="toggle-slider"></span>
+        </label>
       </div>
 
     </section>
@@ -962,8 +1007,13 @@ function setChunk(index) {
   $("scratchpad-section").style.display = "block";
   $("scratchpad").value = "";   // fresh pad for each new chunk
 
+  // Transition from landing to study UI
+  $("landing-screen").classList.add("hidden");
+  $("phase-tabs").style.display = "";
+
   // Update nav
   $("chunk-nav").style.display = "flex";
+  $("lenient-row").style.display = "flex";
   $("chunk-progress").textContent = `${state.chunkIndex + 1} / ${state.chunks.length}`;
   $("prev-chunk-btn").disabled = state.chunkIndex === 0;
   $("next-chunk-btn").disabled = state.chunkIndex >= state.chunks.length - 1;
@@ -1006,6 +1056,7 @@ async function doLogin() {
     $("user-pill").innerHTML = `Logged in as <strong>${escHtml(state.user)}</strong>`;
     renderHistory();
     renderFavorites();
+    $("landing-text").focus();
   } catch (err) {
     $("login-error").textContent = err.message;
     $("login-error").classList.remove("hidden");
@@ -1031,10 +1082,14 @@ async function doLogout() {
     $("login-screen").classList.remove("hidden");
   }
   $("chunk-nav").style.display = "none";
-  $("memorize-display").classList.add("empty");
-  $("memorize-display").textContent = "Extract chunks from the sidebar to begin.";
+  $("lenient-row").style.display = "none";
   $("memorize-actions").style.display = "none";
-  showPhase("memorize");
+  $("scratchpad-section").style.display = "none";
+  ["memorize","test","result"].forEach(p => $(`phase-${p}`).classList.add("hidden"));
+  $("phase-tabs").style.display = "none";
+  document.querySelector("main").classList.remove("sidebar-open");
+  $("landing-text").value = "";
+  $("landing-screen").classList.remove("hidden");
 }
 
 // ---- Extract ----
@@ -1160,6 +1215,42 @@ async function loadExampleText(index) {
   $("source-text").focus();
 }
 
+// ---- Landing screen handlers ----
+async function doLandingExtract() {
+  const text = $("landing-text").value.trim();
+  if (!text) return;
+  $("source-text").value = text;
+  $("difficulty-select").value = $("landing-difficulty").value;
+  await doExtract();
+}
+
+async function toggleLandingExampleList() {
+  const panel = $("landing-example-list");
+  if (!panel.classList.contains("hidden")) { panel.classList.add("hidden"); return; }
+  if (!exampleTextsCache) {
+    const data = await api("GET", "/api/example_texts");
+    exampleTextsCache = data.texts;
+  }
+  panel.innerHTML = exampleTextsCache.map((t, i) =>
+    `<div class="example-item" onclick="loadLandingExampleText(${i})">
+      <div class="ex-title">${escHtml(t.title)}</div>
+      <div class="ex-preview">${escHtml(t.preview)}</div>
+    </div>`
+  ).join("");
+  panel.classList.remove("hidden");
+}
+
+async function loadLandingExampleText(index) {
+  const data = await api("GET", `/api/example_texts/${index}`);
+  $("landing-text").value = data.text;
+  $("landing-example-list").classList.add("hidden");
+  $("landing-text").focus();
+}
+
+function toggleSidebar() {
+  document.querySelector("main").classList.toggle("sidebar-open");
+}
+
 $("password-btn").addEventListener("click", doUnlock);
 $("password-input").addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
 
@@ -1181,6 +1272,10 @@ $("login-btn").addEventListener("click", doLogin);
 $("login-name").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
 $("logout-btn").addEventListener("click", doLogout);
 $("extract-btn").addEventListener("click", doExtract);
+$("landing-extract-btn").addEventListener("click", doLandingExtract);
+$("landing-example-btn").addEventListener("click", toggleLandingExampleList);
+$("landing-text").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doLandingExtract(); });
+$("sidebar-toggle-btn").addEventListener("click", toggleSidebar);
 
 $("prev-chunk-btn").addEventListener("click", () => setChunk(state.chunkIndex - 1));
 $("next-chunk-btn").addEventListener("click", () => setChunk(state.chunkIndex + 1));
@@ -1188,11 +1283,15 @@ $("new-extract-btn").addEventListener("click", () => {
   state.chunks = [];
   state.currentChunk = null;
   $("chunk-nav").style.display = "none";
-  $("memorize-display").classList.add("empty");
-  $("memorize-display").textContent = "Extract chunks from the sidebar to begin.";
+  $("lenient-row").style.display = "none";
   $("memorize-actions").style.display = "none";
-  showPhase("memorize");
-  $("source-text").focus();
+  $("scratchpad-section").style.display = "none";
+  ["memorize","test","result"].forEach(p => $(`phase-${p}`).classList.add("hidden"));
+  $("phase-tabs").style.display = "none";
+  document.querySelector("main").classList.remove("sidebar-open");
+  $("landing-text").value = $("source-text").value;
+  $("landing-screen").classList.remove("hidden");
+  $("landing-text").focus();
 });
 
 $("go-test-btn").addEventListener("click", () => showPhase("test"));
