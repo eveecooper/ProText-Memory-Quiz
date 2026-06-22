@@ -331,7 +331,7 @@ class TestFlaskRoutes(unittest.TestCase):
         self.client.post("/api/login", json={"username": "testuser"})
         self.client.post("/api/logout")
         # Should be able to log in again without re-unlocking
-        r = self.client.post("/api/login", json={"username": "anotheruser"})
+        r = self.client.post("/api/login", json={"username": "anothertestuser"})
         self.assertEqual(r.status_code, 200)
 
     # ---- Profile ----
