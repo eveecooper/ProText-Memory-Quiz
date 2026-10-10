@@ -13,7 +13,10 @@ No pytest required — uses stdlib unittest only.
 """
 
 import os
+import socket
+import subprocess
 import sys
+import time
 import unittest
 import uuid
 
@@ -548,6 +551,56 @@ class TestFlaskRoutes(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"ProText Memory Quiz", r.data)
         self.assertIn(b"Favorites", r.data)
+
+
+# ===========================================================================
+# 3. Launcher tests — run.py with a non-console stdout
+# ===========================================================================
+
+class TestLauncherRedirectedOutput(unittest.TestCase):
+    """
+    `python run.py > log.txt` must not crash.
+
+    When stdout is a pipe or a file rather than a console, Python falls back to
+    the locale encoding (cp1252 on Windows), which cannot represent the
+    box-drawing characters in the startup banner.
+    """
+
+    @staticmethod
+    def _free_port() -> int:
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+    def test_banner_survives_cp1252_stdout(self):
+        proc = subprocess.Popen(
+            [sys.executable, "run.py", "--no-browser", "--port", str(self._free_port())],
+            cwd=THIS_DIR,
+            env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        try:
+            output = ""
+            deadline = time.time() + 30
+            while time.time() < deadline:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                output += line
+                if "Ctrl+C to stop" in line:
+                    break
+
+            self.assertNotIn("UnicodeEncodeError", output)
+            self.assertIsNone(proc.poll(), f"run.py exited early:\n{output}")
+            self.assertIn("ProText Memory Quiz", output)
+        finally:
+            proc.terminate()
+            proc.wait(timeout=15)
+            proc.stdout.close()
 
 
 # ===========================================================================
