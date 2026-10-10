@@ -547,10 +547,12 @@ class TestFlaskRoutes(unittest.TestCase):
     # ---- Index route ----
 
     def test_index_returns_html(self):
-        r = self.client.get("/")
-        self.assertEqual(r.status_code, 200)
-        self.assertIn(b"ProText Memory Quiz", r.data)
-        self.assertIn(b"Favorites", r.data)
+        # Closed via `with`: the index route serves a file through
+        # send_from_directory, and the test client never releases the handle.
+        with self.client.get("/") as r:
+            self.assertEqual(r.status_code, 200)
+            self.assertIn(b"ProText Memory Quiz", r.data)
+            self.assertIn(b"Favorites", r.data)
 
 
 # ===========================================================================
