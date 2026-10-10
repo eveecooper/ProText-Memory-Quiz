@@ -19,6 +19,7 @@ Password is only required when running with --host or --public.
 import argparse
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -70,14 +71,32 @@ def get_local_ip() -> str:
         return "unknown"
 
 
+def find_cloudflared() -> str | None:
+    """Find cloudflared, checking PATH then common Windows install locations."""
+    if found := shutil.which("cloudflared"):
+        return found
+    candidates = [
+        os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Links\cloudflared.exe"),
+        r"C:\Program Files\cloudflared\cloudflared.exe",
+        r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
 def start_cloudflare_tunnel(port: int):
     """
     Spawns cloudflared and returns (public_url, process).
     Returns (None, None) if cloudflared is not installed.
     """
+    exe = find_cloudflared()
+    if exe is None:
+        return None, None
     try:
         proc = subprocess.Popen(
-            ["cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
+            [exe, "tunnel", "--url", f"http://localhost:{port}"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

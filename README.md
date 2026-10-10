@@ -11,6 +11,7 @@ Everything runs locally. No account, no internet connection required.
 ```bash
 # 1. Install dependencies (one time)
 pip install -r requirements.txt
+winget install Cloudflare.cloudflared
 
 # 2. Run the app
 python run.py
