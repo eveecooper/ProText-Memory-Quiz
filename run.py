@@ -33,6 +33,19 @@ from app import app, set_password
 from vars import login_passcode
 
 
+def force_utf8_stdio() -> None:
+    """
+    Keep the banner printable when output is not a console.
+
+    Windows consoles take UTF-8, but a redirected stdout (`python run.py > log.txt`)
+    falls back to the locale encoding, and cp1252 cannot represent the banner's
+    box-drawing characters.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="ProText Memory Quiz — memory training app",
@@ -132,6 +145,7 @@ def open_browser(url: str, delay: float = 1.2):
 
 
 def main():
+    force_utf8_stdio()
     args = parse_args()
 
     bind_host = "0.0.0.0" if (args.host or args.public) else "127.0.0.1"
