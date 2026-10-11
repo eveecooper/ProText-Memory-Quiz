@@ -16,9 +16,11 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 import uuid
+from pathlib import Path
 
 from vars import login_passcode
 
@@ -46,6 +48,30 @@ which stabilizes training of very deep networks.
 """
 
 SIMPLE_TEXT = "The cat sat on the mat. The dog ran fast."
+
+
+_tmp_data_dir  = None
+_real_data_dir = None
+
+
+def setUpModule():
+    """
+    Redirect profile writes into a temp directory for the whole module.
+
+    Several routes call save_profile() — /api/login does it just by logging in —
+    so without this the suite drops throwaway profiles into the repo's data/
+    alongside real users. profile_path() reads app.DATA_DIR at call time, so
+    swapping the module global is enough.
+    """
+    global _tmp_data_dir, _real_data_dir
+    _tmp_data_dir       = tempfile.TemporaryDirectory(prefix="protext-tests-")
+    _real_data_dir      = app_module.DATA_DIR
+    app_module.DATA_DIR = Path(_tmp_data_dir.name)
+
+
+def tearDownModule():
+    app_module.DATA_DIR = _real_data_dir
+    _tmp_data_dir.cleanup()
 
 
 # ===========================================================================
@@ -603,6 +629,38 @@ class TestLauncherRedirectedOutput(unittest.TestCase):
             proc.terminate()
             proc.wait(timeout=15)
             proc.stdout.close()
+
+
+# ===========================================================================
+# 4. Isolation tests — the suite must not touch the real data/ directory
+# ===========================================================================
+
+REPO_DATA_DIR = os.path.join(THIS_DIR, "data")
+
+
+class TestDataDirIsolation(unittest.TestCase):
+    """
+    /api/login calls save_profile(), so merely logging in creates a profile
+    file. Those writes must land in a temp directory, never in the repo's
+    data/, which holds real user profiles.
+    """
+
+    def setUp(self):
+        app.config["TESTING"]    = True
+        app.config["SECRET_KEY"] = "test-secret"
+        self.client = app.test_client()
+        app_module.set_password(login_passcode)
+
+    def _repo_data_files(self) -> set:
+        if not os.path.isdir(REPO_DATA_DIR):
+            return set()
+        return set(os.listdir(REPO_DATA_DIR))
+
+    def test_login_writes_no_file_into_repo_data_dir(self):
+        before = self._repo_data_files()
+        self.client.post("/api/unlock", json={"password": login_passcode})
+        self.client.post("/api/login", json={"username": f"isolation_{uuid.uuid4().hex[:8]}"})
+        self.assertEqual(set(), self._repo_data_files() - before)
 
 
 # ===========================================================================
