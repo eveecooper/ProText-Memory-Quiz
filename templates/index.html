@@ -633,6 +633,95 @@
     .sidebar { order: 2; }
     .main-panel { order: 1; }
   }
+  /* ---- Header menu ---- */
+  .menu-wrap { position: relative; }
+  .menu-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 170px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    padding: 4px;
+    z-index: 40;
+  }
+  .menu-dropdown.hidden { display: none; }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: none;
+    border: 0;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .menu-item:hover { background: var(--bg); color: var(--accent); }
+
+  /* ---- History page ---- */
+  .hist-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .hist-head h2 { font-size: 1.05rem; font-weight: 600; }
+  .hist-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .hist-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+  .hist-stat .label {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .hist-stat .value {
+    font-family: var(--mono);
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+  .hist-rows { display: flex; flex-direction: column; gap: 8px; }
+  .hist-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .hist-row .h-text {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .hist-row .h-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .h-date { color: var(--text-dim); font-size: 0.75rem; }
+  .hist-empty { color: var(--text-dim); font-size: 0.85rem; }
+
 </style>
 </head>
 <body>
@@ -677,6 +766,12 @@
   <header>
     <div class="logo">ProText <span>Memory Quiz</span></div>
     <div class="header-right">
+      <div class="menu-wrap">
+        <button class="btn btn-ghost btn-sm" id="menu-btn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
+        <div class="menu-dropdown hidden" id="menu-dropdown" role="menu">
+          <button class="menu-item" id="menu-history-btn" role="menuitem">🕓 History &amp; best scores</button>
+        </div>
+      </div>
       <div class="user-pill" id="user-pill">logged out</div>
       <button class="btn btn-ghost btn-sm" id="logout-btn">Log out</button>
     </div>
@@ -847,6 +942,20 @@
           <input type="checkbox" id="lenient-toggle" checked />
           <span class="toggle-slider"></span>
         </label>
+      </div>
+
+      <!-- HISTORY PAGE — reached from the header menu -->
+      <div id="history-screen" class="hidden">
+        <div class="hist-head">
+          <button class="btn btn-ghost btn-sm" id="hist-back-btn">← Back</button>
+          <h2>History &amp; best scores</h2>
+          <div class="flex-row" style="margin-left:auto;gap:8px;">
+            <button class="btn btn-ghost btn-sm" id="hist-clear-last10-btn">Clear last 10</button>
+            <button class="btn btn-danger btn-sm" id="hist-clear-all-btn">Clear all</button>
+          </div>
+        </div>
+        <div class="hist-stats" id="hist-stats"></div>
+        <div class="hist-rows" id="hist-rows"></div>
       </div>
 
     </section>
@@ -1072,6 +1181,7 @@ async function doLogout() {
   state.favorites = [];
   state.chunks    = [];
   state.currentChunk = null;
+  $("history-screen").classList.add("hidden");
   $("app").classList.add("hidden");
   $("login-name").value = "";
   $("password-input").value = "";
@@ -1098,6 +1208,7 @@ async function doLogout() {
 async function doExtract() {
   const text = $("source-text").value.trim();
   if (!text) return;
+  $("history-screen").classList.add("hidden");
   const difficulty = $("difficulty-select").value;
   const shuffle = $("shuffle-toggle").checked;
 
@@ -1184,6 +1295,7 @@ async function clearHistory(mode) {
   const data = await api("DELETE", "/api/history", { mode });
   state.history = data.history;
   renderHistory();
+  if (!$("history-screen").classList.contains("hidden")) renderHistoryPage();
 }
 
 // ---- Event listeners ----
@@ -1253,6 +1365,111 @@ function toggleSidebar() {
   document.querySelector("main").classList.toggle("sidebar-open");
 }
 
+// ---- Header menu ----
+function closeMenu() {
+  $("menu-dropdown").classList.add("hidden");
+  $("menu-btn").setAttribute("aria-expanded", "false");
+}
+
+function toggleMenu(e) {
+  e.stopPropagation();
+  const open = !$("menu-dropdown").classList.toggle("hidden");
+  $("menu-btn").setAttribute("aria-expanded", String(open));
+}
+
+// ---- History page ----
+function formatDate(ts) {
+  if (!ts) return "no date";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "no date";
+  return d.toLocaleString(undefined, {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function renderHistoryPage() {
+  const stats = $("hist-stats");
+  const rows  = $("hist-rows");
+  const h     = state.history;
+
+  if (!h.length) {
+    stats.innerHTML = "";
+    rows.innerHTML  = `<p class="hist-empty">No attempts yet — extract some chunks and test yourself to start building a history.</p>`;
+    return;
+  }
+
+  const avg  = Math.round(h.reduce((sum, x) => sum + (x.accuracy || 0), 0) / h.length);
+  const best = Math.max(...h.map(x => x.accuracy || 0));
+  const tally = h.reduce((m, x) => {
+    const d = x.difficulty || "unknown";
+    m[d] = (m[d] || 0) + 1;
+    return m;
+  }, {});
+  const topDiff = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
+
+  stats.innerHTML = `
+    <div class="hist-stat"><div class="label">Chunks tested</div><div class="value">${h.length}</div></div>
+    <div class="hist-stat"><div class="label">Average best</div><div class="value h-score ${scoreClass(avg)}">${avg}%</div></div>
+    <div class="hist-stat"><div class="label">Top score</div><div class="value h-score ${scoreClass(best)}">${best}%</div></div>
+    <div class="hist-stat"><div class="label">Most practised</div><div class="value" style="font-size:0.95rem;">${escHtml(topDiff)}</div></div>`;
+
+  rows.innerHTML = h.map(x => {
+    const chunk = x.chunk_text || "";
+    const isFav = state.favorites.includes(chunk);
+    return `
+    <div class="hist-row">
+      <div class="h-text">${escHtml(chunk)}</div>
+      <div class="h-meta">
+        <span class="h-score ${scoreClass(x.accuracy || 0)}">${x.accuracy || 0}%</span>
+        <span class="h-diff-tag">${escHtml(x.difficulty || "unknown")}</span>
+        <span class="h-date">${escHtml(formatDate(x.timestamp))}</span>
+        <button class="star-btn ${isFav ? "active" : ""}" style="margin-left:auto;font-size:0.9rem;"
+          data-chunk="${escHtml(chunk)}" onclick="toggleFavFromHistory(this)">${isFav ? "★" : "☆"}</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+async function openHistoryPage() {
+  closeMenu();
+  // Read from disk rather than trusting what was loaded at login, so the page
+  // always shows what is actually saved.
+  try {
+    const data = await api("GET", "/api/profile");
+    state.history   = data.history   || [];
+    state.favorites = data.favorites || [];
+    renderHistory();
+    renderFavorites();
+  } catch (e) {
+    // Offline or not logged in — fall back to whatever is already in state.
+  }
+
+  $("landing-screen").classList.add("hidden");
+  $("phase-tabs").style.display = "none";
+  $("chunk-nav").style.display  = "none";
+  $("lenient-row").style.display = "none";
+  $("scratchpad-section").style.display = "none";
+  ["memorize","test","result"].forEach(p => $(`phase-${p}`).classList.add("hidden"));
+  document.querySelector("main").classList.remove("sidebar-open");
+
+  renderHistoryPage();
+  $("history-screen").classList.remove("hidden");
+}
+
+function closeHistoryPage() {
+  $("history-screen").classList.add("hidden");
+  if (state.chunks.length) {
+    // A quiz is still loaded in memory — drop back into it where it was left.
+    $("phase-tabs").style.display = "";
+    $("chunk-nav").style.display  = "flex";
+    setChunk(state.chunkIndex);
+    showPhase(state.phase);
+  } else {
+    $("landing-screen").classList.remove("hidden");
+  }
+}
+
 $("password-btn").addEventListener("click", doUnlock);
 $("password-input").addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
 
@@ -1278,6 +1495,14 @@ $("landing-extract-btn").addEventListener("click", doLandingExtract);
 $("landing-example-btn").addEventListener("click", toggleLandingExampleList);
 $("landing-text").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) doLandingExtract(); });
 $("sidebar-toggle-btn").addEventListener("click", toggleSidebar);
+$("menu-btn").addEventListener("click", toggleMenu);
+$("menu-history-btn").addEventListener("click", openHistoryPage);
+$("hist-back-btn").addEventListener("click", closeHistoryPage);
+$("hist-clear-last10-btn").addEventListener("click", () => clearHistory("last10"));
+$("hist-clear-all-btn").addEventListener("click", () => clearHistory("all"));
+document.addEventListener("click", e => {
+  if (!e.target.closest(".menu-wrap")) closeMenu();
+});
 
 $("prev-chunk-btn").addEventListener("click", () => setChunk(state.chunkIndex - 1));
 $("next-chunk-btn").addEventListener("click", () => setChunk(state.chunkIndex + 1));
